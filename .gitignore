@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+debug_output.txt
+debug_page.mjs
+debug_page_errors.mjs
+err.txt
+screenshot.mjs
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+venv/
+env/
+.venv/
+
+# Temporary files
+*.tmp
+*.swp
