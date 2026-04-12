@@ -1,80 +1,51 @@
 # backend/app/crime_processor.py
 # Contains data transformation logic for the IPC dataset using pure Python (no pandas). 
 
-from collections import defaultdict
+import json
+from pathlib import Path
 from typing import List, Dict, Any
 
-# Coordinates for all Maharashtra districts.
-# All districts in Maharashtra will be included in the processed output.
-DISTRICT_COORDINATES = {
-    "Ahmednagar": (19.08, 74.73),
-    "Akola": (20.70, 77.00),
-    "Amravati": (20.93, 77.75),
-    "Aurangabad": (19.88, 75.32),
-    "Beed": (18.98, 75.75),
-    "Bhandara": (21.17, 79.65),
-    "Buldhana": (20.53, 76.18),
-    "Chandrapur": (19.95, 79.30),
-    "Chhatrapati Sambhajinagar": (19.88, 75.32),  # Aurangabad
-    "Dharashiv": (18.18, 76.03),  # Osmanabad
-    "Dhule": (20.90, 74.77),
-    "Gadchiroli": (20.18, 80.00),
-    "Gondia": (21.45, 80.20),
-    "Hingoli": (19.72, 77.15),
-    "Jalgaon": (21.00, 75.57),
-    "Jalna": (19.83, 75.88),
-    "Kolhapur": (16.70, 74.23),
-    "Latur": (18.40, 76.57),
-    "Mumbai": (19.08, 72.88),
-    "Mumbai Suburban": (19.05, 72.83),
-    "Nagpur": (21.15, 79.08),
-    "Nanded": (19.15, 77.30),
-    "Nandurbar": (21.87, 74.23),
-    "Nashik": (20.00, 73.78),
-    "Osmanabad": (18.18, 76.03),
-    "Palghar": (19.68, 72.77),
-    "Parbhani": (19.27, 76.77),
-    "Pune": (18.52, 73.86),
-    "Raigad": (18.65, 72.88),
-    "Ratnagiri": (16.98, 73.30),
-    "Sangli": (16.85, 74.60),
-    "Satara": (17.68, 74.00),
-    "Sindhudurg": (16.00, 73.47),
-    "Solapur": (17.68, 75.92),
-    "Thane": (19.22, 72.98),
-    "Wardha": (20.73, 78.60),
-    "Washim": (20.10, 77.13),
-    "Yavatmal": (20.38, 78.13),
-}
+ROOT = Path(__file__).resolve().parents[1]
+COORDS_FILE = ROOT / "data" / "district_coords.json"
 
-
-def _normalize_column_name(value: str) -> str:
-    return value.strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_")
-
-
-def _to_int(value: Any) -> int:
+def load_all_coordinates() -> Dict[str, Dict[str, List[float]]]:
+    """Load the full coordinate mapping from district_coords.json."""
+    if not COORDS_FILE.exists():
+        return {}
     try:
-        return int(float(str(value).strip()))
-    except Exception:
-        return 0
+        return json.loads(COORDS_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error loading coordinates: {e}")
+        return {}
 
+def normalize_name(name: str) -> str:
+    """Robust normalization for district/state names to ensure mapping consistency."""
+    if not name: return ""
+    # Standardize case, remove hyphens, and strip whitespace
+    return name.lower().replace("-", " ").strip()
 
-def process_raw_data(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Process raw IPC rows into a district-level crime dataset."""
+def process_raw_data(rows: List[Dict[str, Any]], state_filter: str = "Maharashtra") -> List[Dict[str, Any]]:
+    """Process raw IPC rows into a district-level crime dataset for a specific state."""
 
     if not rows:
         return []
+
+    all_coords = load_all_coordinates()
+    # Get state coordinates and normalize keys for robust matching
+    state_coords = all_coords.get(state_filter, {})
+    normalized_coords = {normalize_name(k): v for k, v in state_coords.items()}
+    
+    target_state_norm = normalize_name(state_filter)
 
     # Normalize headers and create uniform records.
     normalized_rows = []
     for r in rows:
         normalized_rows.append({
-            _normalize_column_name(k): (v.strip() if isinstance(v, str) else v)
+            k.strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_"): (v.strip() if isinstance(v, str) else v)
             for k, v in r.items()
         })
 
     # Column mapping with aliases
-    # Map normalized internal key -> list of possible CSV column names (normalized)
     column_map = {
         "year": ["year"],
         "state_name": ["state_name", "state"],
@@ -88,10 +59,8 @@ def process_raw_data(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "rape": ["rape"],
     }
 
-    # Verify critical columns exist (year, state, district)
-    critical = ["year", "state_name", "district_name"]
+    # Verify critical columns exist
     found_map = {}
-    
     first_row = normalized_rows[0]
     for key, aliases in column_map.items():
         for alias in aliases:
@@ -99,28 +68,57 @@ def process_raw_data(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 found_map[key] = alias
                 break
     
-    # If critical columns are missing, we can't process
-    if not all(c in found_map for c in critical):
+    if not all(c in found_map for c in ["year", "state_name", "district_name"]):
         return []
 
-    # Filter to Maharashtra and aggregate per (district, year)
+    # Aggregation loop
     agg: Dict[tuple, Dict[str, Any]] = {}
+    skipped_districts = set()
 
     for r in normalized_rows:
-        state = str(r.get(found_map["state_name"], "")).strip().lower()
-        if state != "maharashtra":
+        state_r = str(r.get(found_map["state_name"], ""))
+        if normalize_name(state_r) != target_state_norm:
             continue
             
-        district = str(r.get(found_map["district_name"], "")).strip()
+        district_raw = str(r.get(found_map["district_name"], "")).strip()
         year = str(r.get(found_map["year"], "")).strip()
-        if not district or not year:
+        if not district_raw or not year:
             continue
 
-        key = (district, year)
+        # Coordinate Guardrail: Only process districts we can render
+        dist_norm = normalize_name(district_raw)
+        
+        # Try exact match
+        coord = normalized_coords.get(dist_norm)
+        
+        if not coord:
+            # Try removal of suffixes if raw data was longer
+            for suffix in [" delhi", " city", " rural", " urban"]:
+                if suffix in dist_norm:
+                    shorter = dist_norm.replace(suffix, "").strip()
+                    if shorter in normalized_coords:
+                        coord = normalized_coords[shorter]
+                        break
+        
+        if not coord:
+            # Try appending suffixes if JSON mapping was longer
+            for suffix in [" delhi", " city", " rural", " urban"]:
+                longer = dist_norm + suffix
+                if longer in normalized_coords:
+                    coord = normalized_coords[longer]
+                    break
+        
+        if not coord:
+            skipped_districts.add(district_raw)
+            continue
+
+        key = (district_raw, year)
         if key not in agg:
             agg[key] = {
-                "district": district,
+                "district": district_raw,
                 "year": year,
+                "lat": coord[0],
+                "lng": coord[1],
                 "murder": 0,
                 "robbery": 0,
                 "thefts": 0,
@@ -130,22 +128,19 @@ def process_raw_data(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "rape": 0,
             }
 
-        # Aggregate values, defaulting to 0 if column is missing in this dataset
         for internal_key in ["murder", "robbery", "thefts", "vehicle_theft", "burglary", "cheating", "rape"]:
             alias = found_map.get(internal_key)
             if alias:
-                agg[key][internal_key] += _to_int(r.get(alias))
+                try:
+                    agg[key][internal_key] += int(float(str(r.get(alias, 0)).strip()))
+                except: pass
 
-    # Compute crime score and merge coordinates
+    if skipped_districts:
+        print(f"[PROCESSOR] Warning: Skipped {len(skipped_districts)} districts in {state_filter} due to missing coordinates: {list(skipped_districts)}")
+
+    # Precompute safety metrics and final results
     results: List[Dict[str, Any]] = []
-    for (district, year), values in agg.items():
-        # Check coordinates (fallback for variations in naming)
-        coord_key = district
-        if district not in DISTRICT_COORDINATES:
-            # Simple fuzzy check for names like "Mumbai City" vs "Mumbai"
-            # But the DISTRICT_COORDINATES seem pretty comprehensive for Maharashtra.
-            continue
-
+    for values in agg.values():
         murder = values["murder"]
         robbery = values["robbery"]
         thefts = values["thefts"]
@@ -154,33 +149,13 @@ def process_raw_data(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         cheating = values["cheating"]
         rape = values["rape"]
 
+        # Precomputed Crime Score
         crime_score = (
-            murder * 5
-            + robbery * 4
-            + vehicle_theft * 3
-            + thefts * 2
-            + burglary * 3
-            + cheating * 2
-            + rape * 5
+            murder * 5 + robbery * 4 + vehicle_theft * 3 + thefts * 2 + 
+            burglary * 3 + cheating * 2 + rape * 5
         )
-
-        lat, lng = DISTRICT_COORDINATES[coord_key]
-
-        results.append(
-            {
-                "district": district,
-                "year": year,
-                "lat": lat,
-                "lng": lng,
-                "murder": murder,
-                "robbery": robbery,
-                "thefts": thefts,
-                "vehicle_theft": vehicle_theft,
-                "burglary": burglary,
-                "cheating": cheating,
-                "rape": rape,
-                "crime_score": crime_score,
-            }
-        )
+        values["crime_score"] = crime_score
+        results.append(values)
 
     return results
+

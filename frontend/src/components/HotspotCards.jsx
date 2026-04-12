@@ -30,6 +30,7 @@ export default function HotspotCards({ hotspotsData, onSelectHotspot }) {
           
           return (
             <button
+              type="button"
               key={spot.rank}
               onClick={() => onSelectHotspot?.(spot)}
               className="w-full group rounded-xl bg-[#0A1628] border border-slate-700/30 hover:border-[#F39C12]/50 p-4 transition-all hover:shadow-lg hover:shadow-orange-900/10 text-left relative overflow-hidden"

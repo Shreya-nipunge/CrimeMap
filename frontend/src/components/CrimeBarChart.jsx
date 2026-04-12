@@ -41,12 +41,20 @@ export default function CrimeBarChart({ barData }) {
     value: source.values[i] ?? 0,
   }));
 
+  const hasData = chartData.some(d => d.value > 0);
+
   return (
-    <Card className="h-full">
+    <Card className="h-full relative overflow-hidden">
       <CardHeader>
         <CardTitle>Incidents by Type</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="relative h-full">
+        {!hasData && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#132240]/60 backdrop-blur-[2px]">
+            <p className="text-slate-400 text-sm font-medium">No incident data recorded</p>
+            <p className="text-slate-500 text-[10px] uppercase tracking-widest mt-1">Adjust filters to broaden search</p>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}

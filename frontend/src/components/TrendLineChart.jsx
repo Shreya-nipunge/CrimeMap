@@ -23,12 +23,20 @@ export default function TrendLineChart({ trendData }) {
 
   const chartData = data.map((d) => ({ month: d.month, count: d.count }));
 
+  const hasData = chartData.some(d => d.count > 0);
+
   return (
-    <Card className="h-full">
+    <Card className="h-full relative overflow-hidden">
       <CardHeader>
         <CardTitle>Yearly Crime Trend (2017-2022)</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="relative h-full">
+        {!hasData && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#132240]/60 backdrop-blur-[2px]">
+            <p className="text-slate-400 text-sm font-medium">No historical data found</p>
+            <p className="text-slate-500 text-[10px] uppercase tracking-widest mt-1">Select state level for trends</p>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
             <defs>

@@ -36,7 +36,7 @@ export default function RoleSelection() {
                 <User size={40} strokeWidth={1.5} />
             </div>
             <div>
-                <h3 className="text-2xl font-bold mb-2 group-hover:text-blue-400 transition-colors">User / Police</h3>
+                <h3 className="text-2xl font-bold mb-2 group-hover:text-blue-400 transition-colors">User</h3>
                 <p className="text-slate-400 text-sm leading-relaxed max-w-[180px]">Access general analytics and public safety data</p>
             </div>
             

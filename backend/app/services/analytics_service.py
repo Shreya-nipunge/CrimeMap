@@ -9,9 +9,7 @@ def compute_safety_score_and_trends(data: List[Dict[str, Any]], target_district:
     if not data:
         return {"score": 0, "risk": "Low", "trend": "Stable", "rank": 0, "state_avg_diff": 0}
 
-    # Aggregate total scores per district (latest year or sum, here we use sum over available years.
-    # Alternatively, just use the latest year data for comparison)
-    # Let's find the latest year in the dataset
+    # Aggregate total scores per district (latest year)
     latest_year = max(int(r.get("year", 0)) for r in data)
     
     district_latest_scores = {}
@@ -23,7 +21,7 @@ def compute_safety_score_and_trends(data: List[Dict[str, Any]], target_district:
     if not district_latest_scores:
         return {"score": 0, "risk": "Low", "trend": "Stable", "rank": 0, "state_avg_diff": 0}
 
-    max_state_score = max(district_latest_scores.values()) if dict.values else 1
+    max_state_score = max(district_latest_scores.values()) if district_latest_scores else 1
     if max_state_score == 0:
         max_state_score = 1
         
@@ -31,7 +29,8 @@ def compute_safety_score_and_trends(data: List[Dict[str, Any]], target_district:
 
     target_score_raw = district_latest_scores.get(target_district, 0)
     
-    # Normalize per state
+    # Normalize per state (Inverse: higher is worse here? No, let's keep it consistent: score is crime severity)
+    # The frontend converts it for the circle.
     normalized_score = min(int((target_score_raw / max_state_score) * 100), 100)
     
     # Risk Label
@@ -52,13 +51,12 @@ def compute_safety_score_and_trends(data: List[Dict[str, Any]], target_district:
             break
 
     # State avg diff in %
-    # How much higher or lower is the district's raw score from state average?
     if state_avg_score > 0:
         pct_diff = ((target_score_raw - state_avg_score) / state_avg_score) * 100
     else:
         pct_diff = 0
 
-    # Trend logic (for the target district)
+    # Trend logic
     district_data = [r for r in data if r.get("district") == target_district]
     district_data_sorted = sorted(district_data, key=lambda x: int(x.get("year", 0)))
     trend = "Stable"
@@ -107,7 +105,6 @@ def get_rising_crimes(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 prev_counts[k] += int(r.get(k, 0))
 
     if not has_prev:
-        # If we only have 1 year of data, just return top crimes by volume for now instead of rising
         crimes = [{'type': k.title().replace('_', ' '), 'growth_pct': 0, 'latest': v} for k, v in latest_counts.items()]
         crimes.sort(key=lambda x: x['latest'], reverse=True)
         return crimes[:3]
@@ -116,10 +113,7 @@ def get_rising_crimes(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for k in crime_keys:
         prev = prev_counts[k]
         latest = latest_counts[k]
-        if prev > 0:
-            growth = ((latest - prev) / prev) * 100
-        else:
-            growth = 100.0 if latest > 0 else 0.0
+        growth = ((latest - prev) / prev * 100) if prev > 0 else (100 if latest > 0 else 0)
             
         results.append({
             'type': k.title().replace('_', ' '),
@@ -130,3 +124,162 @@ def get_rising_crimes(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         
     results.sort(key=lambda x: x['growth_pct'], reverse=True)
     return results[:3]
+
+def get_state_benchmarks(all_state_data: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """
+    Computes comparative Normalized Safety Index (NSI) across all states.
+    NSI 100 = Safest, 0 = High Alert.
+    """
+    YEAR = "2022"
+    PREV_YEAR = "2021"
+    raw_state_stats = []
+    
+    for state_name, data in all_state_data.items():
+        if not data: continue
+        latest_rows = [r for r in data if str(r.get("year")) == YEAR]
+        prev_rows = [r for r in data if str(r.get("year")) == PREV_YEAR]
+        if not latest_rows: continue
+        
+        avg_score = sum(int(r.get("crime_score", 0)) for r in latest_rows) / len(latest_rows)
+        latest_total = sum(int(r.get("crime_score", 0)) for r in latest_rows)
+        prev_total = sum(int(r.get("crime_score", 0)) for r in prev_rows) if prev_rows else latest_total
+        growth = ((latest_total - prev_total) / prev_total * 100) if prev_total > 0 else 0
+        
+        raw_state_stats.append({
+            "state": state_name.title(),
+            "avg_score": avg_score,
+            "growth": growth
+        })
+
+    if not raw_state_stats: return []
+
+    # NSI Mapping (Higher is safer)
+    MAX_REF = 5000 
+    for stat in raw_state_stats:
+        nsi = max(0, min(100, 100 - (stat["avg_score"] / MAX_REF * 100)))
+        if stat["growth"] > 5: trend = "increasing"
+        elif stat["growth"] < -5: trend = "decreasing"
+        else: trend = "stable"
+        stat["nsi"] = int(nsi)
+        stat["trend"] = trend
+
+    raw_state_stats.sort(key=lambda x: x["nsi"], reverse=True)
+    for idx, stat in enumerate(raw_state_stats):
+        stat["rank"] = idx + 1
+        stat["insight"] = generate_benchmarking_insight(stat)
+    return raw_state_stats
+
+def generate_benchmarking_insight(stat: Dict[str, Any]) -> str:
+    state = stat["state"]
+    trend = stat["trend"]
+    nsi = stat["nsi"]
+    insights = []
+    if nsi > 80: insights.append(f"{state} maintains a resilient safety profile.")
+    elif nsi > 50: insights.append(f"{state} shows moderate concerns in urban clusters.")
+    else: insights.append(f"{state} is under high alert due to incident density.")
+    
+    if trend == "decreasing": insights.append("Data shows a positive downward trend.")
+    elif trend == "increasing": insights.append("Recent uptick in reported activities.")
+    else: insights.append("Security metrics remain stable.")
+    return " ".join(insights)
+def get_gap_alerts(crime_data: List[Dict[str, Any]], complaints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Identifies 'Citizen Gaps' where official crime scores are low but 
+    citizen complaint density is high, suggesting under-reporting.
+    """
+    # 1. Count complaints by district
+    comp_map = {}
+    for c in complaints:
+        d = c.get("district", "Unknown")
+        comp_map[d] = comp_map.get(d, 0) + 1
+
+    # 2. Compare with official crime score
+    alerts = []
+    for r in crime_data:
+        dist = r.get("district")
+        score = int(r.get("crime_score", 0))
+        comp_count = comp_map.get(dist, 0)
+        
+        # Anomaly Detection Logic
+        # If a district has > 3 complaints but a crime score < 50, it's a high gap
+        if comp_count >= 3 and score < 50:
+            alerts.append({
+                "district": dist,
+                "state": r.get("state_name", "Unknown"),
+                "complaint_count": comp_count,
+                "official_score": score,
+                "severity": "CRITICAL" if comp_count > 5 else "MODERATE"
+            })
+    return alerts
+
+def get_actionable_intelligence(dataList: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Analyzes district-level growth between 2021 -> 2022 to generate prioritized 
+    law enforcement alerts and decision support insights.
+    """
+    if not dataList:
+        return []
+
+    YEAR = "2022"
+    PREV_YEAR = "2021"
+    
+    # Classification Logic
+    def get_cat(r):
+        if int(r.get("murder", 0)) > 0 or int(r.get("rape", 0)) > 0: return "Violent"
+        if int(r.get("cheating", 0)) > 0: return "Financial"
+        return "Property"
+
+    latest_performance = {}
+    prev_performance = {}
+    
+    for r in dataList:
+        y = str(r.get("year", ""))
+        key = (r.get("district"), r.get("state_name", "Unknown"))
+        if y == YEAR:
+            latest_performance[key] = {
+                "score": int(r.get("crime_score", 0)),
+                "category": get_cat(r)
+            }
+        elif y == PREV_YEAR:
+            prev_performance[key] = int(r.get("crime_score", 0))
+
+    insights = []
+    for key, latest in latest_performance.items():
+        prev = prev_performance.get(key, 0)
+        district, state = key
+        latest_score = latest["score"]
+        category = latest["category"]
+        
+        growth = ((latest_score - prev) / prev * 100) if prev > 0 else (100 if latest_score > 0 else 0)
+            
+        if growth > 15:
+            priority, status = "HIGH", "🔴"
+            focus = f"Immediate intervention required for rising {category} incidents in {district}."
+        elif growth > 5:
+            priority, status = "MODERATE", "🟡"
+            focus = f"Monitor {category} clusters in {district} for further escalation."
+        else:
+            priority, status = "STABLE", "🟢"
+            focus = f"Performance in {district} ({category}) remains stable relative to historical norms."
+
+        insights.append({
+            "priority": priority,
+            "status": status,
+            "district": district,
+            "state_name": state,
+            "category": category,
+            "growth_pct": int(growth),
+            "observation": f"{category} shifted by {int(growth)}% in {district} ({PREV_YEAR} → {YEAR})",
+            "suggested_focus": focus,
+            "time_range": f"{PREV_YEAR} → {YEAR}"
+        })
+
+    insights.sort(key=lambda x: x["growth_pct"], reverse=True)
+    return insights[:5]
+
+# Macro View Centroids
+STATE_CENTROIDS = {
+    "Maharashtra": [19.7515, 75.7139],
+    "Karnataka": [15.3173, 75.7139],
+    "Delhi": [28.7041, 77.1025]
+}

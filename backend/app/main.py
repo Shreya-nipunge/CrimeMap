@@ -35,7 +35,7 @@ uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
 uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-app.include_router(router)
+app.include_router(router, prefix="/api")
 app.include_router(news.router)
 
 

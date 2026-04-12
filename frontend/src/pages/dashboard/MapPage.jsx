@@ -17,11 +17,11 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState(null);
 
-  // Re-derive district Data
+// Re-derive district Data
   const selectedDistrictData = useMemo(() => {
     if (!selectedLocation) return null;
     return crimeData.find(c => {
-      if (selectedLocation.label && selectedLocation.label.toLowerCase().includes(c.district.toLowerCase())) return true;
+      if (selectedLocation.label && selectedLocation.label.toLowerCase().includes((c.district || '').toLowerCase())) return true;
       return Math.abs(Number(c.lat) - selectedLocation.lat) < 0.1 && 
              Math.abs(Number(c.lng) - selectedLocation.lng) < 0.1;
     });
@@ -63,9 +63,19 @@ export default function MapPage() {
   }, [setSearchParams]);
 
   const handleSelectHotspot = (spot) => {
-    const match = crimeData.find((c) => c.district === spot.area);
+    const match = crimeData.find((c) => {
+      const areaName = (spot.area || '').toLowerCase();
+      const districtName = (c.district || '').toLowerCase();
+      if (!districtName) return false;
+      return areaName.includes(districtName) || districtName.includes(areaName.split(',')[0].trim());
+    });
     if (match) {
-      setSelectedLocation({ lat: match.lat, lng: match.lng, label: spot.area });
+      setSelectedLocation({ 
+        lat: Number(match.lat) || 20, 
+        lng: Number(match.lng) || 78, 
+        label: match.district,
+        source: 'hotspot'
+      });
     }
   };
 
@@ -92,9 +102,11 @@ export default function MapPage() {
             selectedLocation={selectedLocation} 
             onLocationSelect={(loc) => {
                setSelectedLocation(loc);
-               // Also sync district to URL if needed, but for now state is enough
-               // Provide auto-fill location logic implicitly via state
-               if (loc.label) setSearchParams({ state: filters.state, district: loc.label });
+               if (loc && loc.label) {
+                 setSearchParams({ state: filters.state, district: loc.label });
+               } else {
+                 setSearchParams({ state: filters.state });
+               }
             }} 
           />
         </div>

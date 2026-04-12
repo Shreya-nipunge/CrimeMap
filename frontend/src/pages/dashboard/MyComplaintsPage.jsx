@@ -1,6 +1,6 @@
 // frontend/src/pages/dashboard/MyComplaintsPage.jsx
 import { useState, useEffect } from 'react';
-import { FileText, Clock, CheckCircle, AlertCircle, ChevronRight, Calendar, MapPin } from 'lucide-react';
+import { FileText, Clock, CheckCircle, AlertCircle, ChevronRight, Calendar, MapPin, XCircle, AlertTriangle } from 'lucide-react';
 import { getMyComplaints } from '../../services/api';
 
 export default function MyComplaintsPage() {
@@ -12,7 +12,7 @@ export default function MyComplaintsPage() {
     const fetchMyComplaints = async () => {
       try {
         const data = await getMyComplaints();
-        setComplaints(data.complaints || []);
+        setComplaints(Array.isArray(data) ? data : data?.complaints || []);
       } catch (err) {
         console.error('Error fetching personal complaints:', err);
         setError('Unable to load your reporting history.');
@@ -28,6 +28,8 @@ export default function MyComplaintsPage() {
     switch (status) {
       case 'resolved':
         return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case 'rejected':
+        return 'bg-red-500/10 text-red-500 border-red-500/30';
       case 'pending':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
       default:
@@ -39,6 +41,8 @@ export default function MyComplaintsPage() {
     switch (status) {
       case 'resolved':
         return <CheckCircle size={14} />;
+      case 'rejected':
+        return <AlertCircle size={14} />;
       case 'pending':
         return <Clock size={14} />;
       default:
@@ -64,6 +68,11 @@ export default function MyComplaintsPage() {
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resolved: {complaints.filter(c => c.status === 'resolved').length}</span>
+           </div>
+           <div className="w-[1px] h-3 bg-slate-800" />
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rejected: {complaints.filter(c => c.status === 'rejected').length}</span>
            </div>
         </div>
       </div>
@@ -95,24 +104,30 @@ export default function MyComplaintsPage() {
               className="group bg-slate-900/60 border border-slate-800/50 rounded-2xl p-5 hover:bg-slate-800/40 hover:border-blue-500/30 transition-all duration-300 flex flex-col md:flex-row gap-6 items-start md:items-center relative overflow-hidden"
             >
               {/* Status Indicator Bar */}
-              <div className={`absolute top-0 bottom-0 left-0 w-1 ${c.status === 'resolved' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <div className={`absolute top-0 bottom-0 left-0 w-1 ${c.status === 'resolved' ? 'bg-emerald-500' : c.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500'}`} />
               
               <div className="flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-widest flex items-center gap-1.5 ${getStatusStyle(c.status)}`}>
-                    {getStatusIcon(c.status)}
-                    {c.status}
-                  </span>
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">#{c.id.split('-')[0]}</span>
+                  {c.status === 'pending' ? (
+                    <span className="flex items-center gap-1.5 text-blue-400 font-bold text-xs"><Clock size={14} className="animate-pulse" /> Analysis in Progress</span>
+                  ) : c.status === 'resolved' ? (
+                    <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs"><CheckCircle size={14} /> Intelligence Verified</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-red-500/60 font-bold text-xs"><XCircle size={14} /> Verification Failed</span>
+                  )}
                 </div>
                 
-                <h3 className="text-lg font-bold text-slate-100 group-hover:text-blue-400 transition-colors uppercase tracking-tight italic">
-                  {c.crime_type}
-                </h3>
-                
-                <p className="text-sm text-slate-400 line-clamp-2 font-medium leading-relaxed">
+                <h3 className="text-lg font-bold text-slate-100 uppercase italic tracking-tight mb-2">{c.crime_type}</h3>
+                <p className="text-sm text-slate-400 line-clamp-2 italic mb-4 border-l border-slate-700 pl-3 leading-relaxed">
                   {c.description}
                 </p>
+
+                {c.status === 'rejected' && (
+                  <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-3 mb-4">
+                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 italic">Administrative Decision</p>
+                    <p className="text-xs text-slate-300">This report did not meet our verification criteria. <span className="text-slate-500 font-medium">Reason: {c.rejection_reason || 'Insufficient Data'}</span></p>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-y-2 gap-x-6 pt-1">
                   <div className="flex items-center gap-2 text-slate-500">

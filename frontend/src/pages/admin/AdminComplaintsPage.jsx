@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getComplaints, updateComplaintStatus } from '../../services/api.js';
-import { CheckCircle, AlertTriangle, Eye, Image as ImageIcon, MapPin, Search } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Eye, Image as ImageIcon, MapPin, Search, XCircle } from 'lucide-react';
 
 function timeAgo(dateString) {
   const date = new Date(dateString);
@@ -22,17 +22,18 @@ function timeAgo(dateString) {
 export default function AdminComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending'); // 'all', 'pending', 'resolved'
+  const [filter, setFilter] = useState('pending'); // 'all', 'pending', 'resolved', 'rejected'
   const [search, setSearch] = useState('');
   
   // Modal State
   const [selectedComplaint, setSelectedComplaint] = useState(null);
-  const [confirmResolve, setConfirmResolve] = useState(null); // id of complaint being confirmed
-  const [isResolving, setIsResolving] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // {id, status}
+  const [rejectReason, setRejectReason] = useState('Insufficient Data');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchComplaints = async () => {
     try {
-      const db = await getComplaints();
+      const db = await getComplaints(null, null, true); // include_rejected = true
       // Ensure we sort by date descending
       const sorted = (db.complaints || []).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
       setComplaints(sorted);
@@ -47,20 +48,19 @@ export default function AdminComplaintsPage() {
     fetchComplaints();
   }, []);
 
-  const handleResolve = async (id) => {
-    setIsResolving(true);
+  const handleStatusUpdate = async (id, status, reason = null) => {
+    setIsProcessing(true);
     try {
-      // Using the service function instead of direct apiClient
-      await updateComplaintStatus(id);
-      setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: 'resolved' } : c));
-      setConfirmResolve(null);
+      await updateComplaintStatus(id, status, reason);
+      setComplaints(prev => prev.map(c => c.id === id ? { ...c, status, rejection_reason: reason } : c));
+      setConfirmAction(null);
       if (selectedComplaint?.id === id) {
-         setSelectedComplaint(prev => ({...prev, status: 'resolved'}));
+         setSelectedComplaint(prev => ({...prev, status, rejection_reason: reason}));
       }
     } catch (e) {
-       console.error("Failed to resolve", e);
+       console.error("Failed to update status", e);
     }
-    setIsResolving(false);
+    setIsProcessing(false);
   };
 
   const pendingCount = complaints.filter(c => c.status === 'pending').length;
@@ -95,7 +95,7 @@ export default function AdminComplaintsPage() {
       {/* Control Bar */}
       <div className="flex flex-col md:flex-row gap-4 justify-between bg-[#132240] p-4 rounded-xl border border-slate-700/50">
          <div className="flex items-center gap-2 bg-slate-900/80 p-1 rounded-lg border border-slate-800">
-           {['all', 'pending', 'resolved'].map(f => (
+           {['all', 'pending', 'resolved', 'rejected'].map(f => (
               <button 
                 key={f}
                 onClick={() => setFilter(f)}
@@ -170,41 +170,35 @@ export default function AdminComplaintsPage() {
                       <td className="px-6 py-4">
                          {comp.status === 'pending' ? (
                             <span className="flex items-center gap-1.5 text-orange-400 font-bold text-xs"><AlertTriangle size={14} /> Pending</span>
-                         ) : (
+                         ) : comp.status === 'resolved' ? (
                             <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs"><CheckCircle size={14} /> Resolved</span>
+                         ) : (
+                            <span className="flex items-center gap-1.5 text-red-500 font-bold text-xs"><XCircle size={14} /> Rejected</span>
                          )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                         {confirmResolve === comp.id ? (
-                            <div className="flex items-center justify-end gap-2 animate-in fade-in duration-300">
-                               <span className="text-[10px] font-bold text-slate-300 uppercase">Confirm?</span>
+                         <div className="flex items-center justify-end gap-2">
+                            <button 
+                               onClick={() => setSelectedComplaint(comp)}
+                               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-md transition-colors"
+                               title="View Details"
+                            ><Eye size={16} /></button>
+                            
+                            {comp.status === 'pending' && (
+                               <>
                                <button 
-                                 disabled={isResolving}
-                                 onClick={() => handleResolve(comp.id)}
-                                 className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded text-xs transition-colors"
-                               >Yes</button>
+                                  onClick={() => handleStatusUpdate(comp.id, 'resolved')}
+                                  className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-transparent hover:border-emerald-400 hover:text-white text-emerald-500 rounded-md transition-colors"
+                                  title="Mark Resolved"
+                               ><CheckCircle size={16} /></button>
                                <button 
-                                 onClick={() => setConfirmResolve(null)}
-                                 className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs transition-colors"
-                               >No</button>
-                            </div>
-                         ) : (
-                            <div className="flex items-center justify-end gap-2">
-                               <button 
-                                  onClick={() => setSelectedComplaint(comp)}
-                                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-md transition-colors"
-                                  title="View Details"
-                               ><Eye size={16} /></button>
-                               
-                               {comp.status === 'pending' && (
-                                  <button 
-                                     onClick={() => setConfirmResolve(comp.id)}
-                                     className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-transparent hover:border-emerald-400 hover:text-white text-emerald-500 rounded-md transition-colors"
-                                     title="Mark Resolved"
-                                  ><CheckCircle size={16} /></button>
-                               )}
-                            </div>
-                         )}
+                                  onClick={() => setConfirmAction({id: comp.id, status: 'rejected'})}
+                                  className="p-1.5 bg-red-500/10 hover:bg-red-500 border border-transparent hover:border-red-400 hover:text-white text-red-500 rounded-md transition-colors"
+                                  title="Reject Complaint"
+                               ><XCircle size={16} /></button>
+                               </>
+                            )}
+                         </div>
                       </td>
                    </tr>
                  ))
@@ -225,8 +219,10 @@ export default function AdminComplaintsPage() {
                       Intelligence Briefing
                       {selectedComplaint.status === 'pending' ? (
                         <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-orange-500/20">Pending Action</span>
-                      ) : (
+                      ) : selectedComplaint.status === 'resolved' ? (
                         <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-emerald-500/20">Resolved</span>
+                      ) : (
+                        <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-red-500/20">Rejected</span>
                       )}
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">Logged {new Date(selectedComplaint.timestamp).toLocaleString()}</p>
@@ -273,6 +269,13 @@ export default function AdminComplaintsPage() {
                     </div>
                  )}
 
+                 {selectedComplaint.rejection_reason && (
+                    <div className="bg-red-500/5 border border-red-500/20 p-4 rounded-xl">
+                       <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 block">Rejection Audit Log</span>
+                       <p className="text-xs text-slate-300 italic">"{selectedComplaint.rejection_reason}"</p>
+                    </div>
+                 )}
+
               </div>
 
               {selectedComplaint.status === 'pending' && (
@@ -281,24 +284,55 @@ export default function AdminComplaintsPage() {
                        onClick={() => setSelectedComplaint(null)}
                        className="px-4 py-2 font-semibold text-xs text-slate-400 hover:text-white transition-colors"
                     >Close Briefing</button>
-                    {confirmResolve === selectedComplaint.id ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-300">Confirm resolution?</span>
-                        <button 
-                           onClick={() => handleResolve(selectedComplaint.id)}
-                           disabled={isResolving}
-                           className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-lg transition-colors"
-                        >Execute</button>
-                      </div>
-                    ) : (
-                      <button 
-                         onClick={() => setConfirmResolve(selectedComplaint.id)}
-                         className="px-6 py-2 bg-[#132240] hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg font-bold text-xs transition-colors shadow-lg"
-                      >Mark as Resolved</button>
-                    )}
+                    <button 
+                       onClick={() => setConfirmAction({id: selectedComplaint.id, status: 'rejected'})}
+                       className="px-6 py-2 bg-[#132240] hover:bg-red-500/20 border border-red-500/30 text-red-500 rounded-lg font-bold text-xs transition-colors shadow-lg"
+                    >Reject Complaint</button>
+                    <button 
+                       onClick={() => handleStatusUpdate(selectedComplaint.id, 'resolved')}
+                       className="px-6 py-2 bg-[#132240] hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg font-bold text-xs transition-colors shadow-lg"
+                    >Mark as Resolved</button>
                  </div>
               )}
 
+           </div>
+        </div>
+      )}
+
+      {/* GLOBAL REJECTION REASON MODAL */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+           <div className="bg-[#0D1E38] border border-slate-700/50 rounded-[2rem] p-8 max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
+             <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-red-500/20">
+               <AlertTriangle className="text-red-500" size={32} />
+             </div>
+             <h3 className="text-xl font-bold text-center text-white mb-2 uppercase italic tracking-tight">Intelligence Rejection</h3>
+             <p className="text-slate-400 text-sm text-center mb-8 font-medium">Are you sure you want to discard this intelligence? This will remove the data from all public monitoring layers.</p>
+             
+             <div className="space-y-4 mb-8">
+               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1">Reason for Rejection</label>
+               <select 
+                 value={rejectReason}
+                 onChange={(e) => setRejectReason(e.target.value)}
+                 className="w-full bg-slate-900/50 border border-slate-700 text-slate-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer font-bold appearance-none italic"
+               >
+                 <option value="Insufficient Data">Insufficient Actionable Data</option>
+                 <option value="Spam / Misleading">Spam or Misleading Submission</option>
+                 <option value="Duplicate Report">Duplicate Regional Report</option>
+                 <option value="Out of Scope">Out of Jurisdictional Scope</option>
+               </select>
+             </div>
+
+             <div className="flex gap-4">
+               <button onClick={() => setConfirmAction(null)} className="flex-1 px-6 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-widest transition-all">Cancel</button>
+               <button 
+                 onClick={() => handleStatusUpdate(confirmAction.id, 'rejected', rejectReason)}
+                 disabled={isProcessing}
+                 className="flex-1 px-6 py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2"
+               >
+                 {isProcessing ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Confirm Rejection'}
+               </button>
+             </div>
            </div>
         </div>
       )}

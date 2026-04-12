@@ -22,6 +22,12 @@ apiClient.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// GET /api/benchmarks
+export const getBenchmarks = async () => {
+  const response = await apiClient.get("/analytics/benchmarks");
+  return response.data;
+};
+
 // GET /api/crimes — returns district-level aggregated crime values used for the heatmap.
 // Optional query param: district (substring match).
 export const getCrimes = async (filters = {}) => {
@@ -30,6 +36,7 @@ export const getCrimes = async (filters = {}) => {
   if (filters.region) params.region = filters.region;
   if (filters.crime_type) params.crime_type = filters.crime_type;
   if (filters.gender) params.gender = filters.gender;
+  if (filters.view_mode) params.view_mode = filters.view_mode;
 
   const response = await apiClient.get("/crimes", { params });
   return response.data;
@@ -87,8 +94,10 @@ export const getSafetyScore = async (district, state = "Maharashtra") => {
   return response.data;
 };
 
-export const getAdminInsights = async (state = "Maharashtra") => {
-  const response = await apiClient.get("/admin/insights", { params: { state } });
+export const getAdminInsights = async (state = "Maharashtra", year = null) => {
+  const params = { state };
+  if (year) params.year = year;
+  const response = await apiClient.get("/admin/insights", { params });
   return response.data;
 };
 
@@ -110,7 +119,7 @@ export const getComplaints = async (state = null, status = null) => {
 };
 
 export const getAdminComplaints = async () => {
-  const response = await apiClient.get('/complaints');
+  const response = await apiClient.get('/complaints', { params: { include_rejected: true } });
   return response.data;
 };
 
@@ -119,8 +128,8 @@ export const getMyComplaints = async () => {
   return response.data;
 };
 
-export const updateComplaintStatus = async (id) => {
-  const response = await apiClient.patch(`/complaints/${id}/status`);
+export const updateComplaintStatus = async (id, status = 'resolved', reason = null) => {
+  const response = await apiClient.patch(`/complaints/${id}/status`, { status, reason });
   return response.data;
 };
 
