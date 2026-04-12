@@ -51,7 +51,7 @@ export default function UserLogin() {
             <div className="w-14 h-14 rounded-xl bg-blue-600/20 flex items-center justify-center shadow-lg shadow-blue-500/10 mb-4 border border-blue-500/20">
               <ShieldAlert size={32} className="text-blue-400" />
             </div>
-            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">User / Police Login</h2>
+            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">User Login</h2>
             <p className="text-blue-400/60 text-sm mt-2 font-medium tracking-wide">Access Regional Analytics Platform</p>
           </div>
 

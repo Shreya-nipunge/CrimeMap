@@ -27,7 +27,7 @@ export default function RoleSelection() {
 
       {/* Cards Container */}
       <div className="flex flex-col md:flex-row justify-center gap-8 w-full max-w-4xl relative z-10 px-4">
-        {/* User / Police Card */}
+        {/* User Card */}
         <div
           onClick={() => navigate('/login-user')}
           className="group relative flex-1 bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 hover:border-blue-500 p-10 rounded-[2rem] transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer flex flex-col items-center text-center gap-6 group hover:scale-[1.02]"
