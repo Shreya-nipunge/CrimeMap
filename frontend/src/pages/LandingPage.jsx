@@ -20,7 +20,7 @@ export default function LandingPage() {
               <ShieldAlert className="w-8 h-8 text-blue-500" />
               <div>
                 <span className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">CrimeMap</span>
-                <span className="hidden sm:block text-xs text-slate-400">Regional Analytics Platform</span>
+                <span className="hidden sm:block text-xs text-slate-400 font-medium">From Crime Data → Crime Intelligence</span>
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-8">
@@ -51,7 +51,7 @@ export default function LandingPage() {
                 </h1>
               </div>
               <p className="mt-4 text-xl md:text-2xl font-medium text-blue-400">
-                Crime Analysis & Hotspot Detection Platform
+                From Crime Data → Crime Intelligence
               </p>
               <p className="mt-6 text-lg md:text-xl text-slate-400 max-w-lg leading-relaxed">
                 Analyze crime patterns, detect hotspots, and explore crime insights using interactive maps and visual analytics.
@@ -206,7 +206,7 @@ export default function LandingPage() {
             <ShieldAlert className="w-6 h-6 text-slate-500" />
             <div>
               <span className="text-lg font-bold text-slate-300">CrimeMap</span>
-              <span className="block text-xs text-slate-600">Regional Crime Analytics Platform</span>
+              <span className="block text-xs text-slate-600">From Crime Data → Crime Intelligence</span>
             </div>
           </div>
           

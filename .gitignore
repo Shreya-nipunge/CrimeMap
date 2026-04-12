@@ -13,6 +13,7 @@ __pycache__/
 # Build outputs
 dist/
 build/
+build_output.txt
 
 # Logs
 *.log
@@ -38,3 +39,12 @@ env/
 # Temporary files
 *.tmp
 *.swp
+
+# Runtime databases (contain sensitive user data — keep out of version control)
+# Seed files are provided as *.example.json
+backend/db/auth_db.json
+backend/db/complaints_db.json
+
+# Uploaded files (user-submitted content at runtime)
+backend/data/uploads/
+backend/uploads/

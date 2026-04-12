@@ -30,10 +30,11 @@ export default function UserRegister() {
     setLoading(true);
 
     try {
-      const data = await registerUser(formData.email, formData.password);
+      const data = await registerUser(formData.email, formData.password, formData.fullName);
       // Auto-login after successful registration
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('role', data.role);
+      localStorage.setItem('userName', data.name);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.');

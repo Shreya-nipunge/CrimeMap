@@ -1,7 +1,7 @@
 # backend/app/routes.py
 # FastAPI routes for the crime analytics backend.
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -35,32 +35,33 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
 
 
-# Cache the processed dataset in memory for faster response.
-_processed_data = None
+# Cache the processed dataset in memory for faster response, keyed by state.
+_processed_data = {}
 
-
-def _get_data():
-    global _processed_data
-    if _processed_data is None:
-        _processed_data = load_processed()
-    return _processed_data
+def _get_data(state: str = "Maharashtra"):
+    state = state.lower()
+    if state not in _processed_data:
+        _processed_data[state] = load_processed(state)
+    return _processed_data[state]
 
 
 @router.get("/crimes")
 def get_crimes(
+    state: str = "Maharashtra",
     region: Optional[str] = None,
     crime_type: Optional[str] = None,
     year: Optional[str] = None,
     gender: Optional[str] = None,
 ):
-    """Return the processed Maharashtra crime dataset.
+    """Return the processed crime dataset for a state.
     Optional query parameters:
+      - state: filter by state (default Maharashtra)
       - region: filter by district/region name (case-insensitive substring match)
       - crime_type: approximate filter by high-incidence crime buckets
       - year: filter by year (e.g., "2017")
-      - gender: currently accepted but not applied (dataset does not include gender info)
+      - gender: currently accepted but not applied
     """
-    data = _get_data()
+    data = _get_data(state)
 
     if year:
         data = [r for r in data if str(r.get("year")) == str(year)]
@@ -103,9 +104,9 @@ def get_crimes(
 
 
 @router.get("/summary")
-def get_summary(year: Optional[str] = None):
+def get_summary(state: str = "Maharashtra", year: Optional[str] = None):
     """Return summary statistics used by the dashboard KPI cards."""
-    data = _get_data()
+    data = _get_data(state)
     if year:
         data = [r for r in data if str(r.get("year")) == str(year)]
 
@@ -150,9 +151,9 @@ def get_summary(year: Optional[str] = None):
 
 
 @router.get("/by-type")
-def get_by_type(year: Optional[str] = None):
+def get_by_type(state: str = "Maharashtra", year: Optional[str] = None):
     """Return aggregated counts per crime type for the bar chart."""
-    data = _get_data()
+    data = _get_data(state)
     if year:
         data = [r for r in data if str(r.get("year")) == str(year)]
 
@@ -181,9 +182,9 @@ def get_by_type(year: Optional[str] = None):
 
 
 @router.get("/trend")
-def get_trend():
+def get_trend(state: str = "Maharashtra"):
     """Return yearly incident counts for the trend line."""
-    data = _get_data()
+    data = _get_data(state)
     yearly = {}
     for r in data:
         y = str(r.get("year"))
@@ -196,9 +197,9 @@ def get_trend():
 
 
 @router.get("/hotspots")
-def get_hotspots(year: Optional[str] = None):
+def get_hotspots(state: str = "Maharashtra", year: Optional[str] = None):
     """Return top 5 districts by crime score for the hotspot cards."""
-    data = _get_data()
+    data = _get_data(state)
     if year:
         data = [r for r in data if str(r.get("year")) == str(year)]
     
@@ -255,6 +256,7 @@ async def upload_csv(file: UploadFile = File(...), current_user: dict = Depends(
 # --- AUTHENTICATION ENDPOINTS ---
 
 class UserRegisterReq(BaseModel):
+    name: str = "User"
     email: str
     password: str
 
@@ -263,6 +265,7 @@ class UserLoginReq(BaseModel):
     password: str
 
 class AdminRegisterReq(BaseModel):
+    name: str = "Administrator"
     email: str
     password: str
 
@@ -274,20 +277,29 @@ class AdminLoginReq(BaseModel):
 def register_user(data: UserRegisterReq):
     email = data.email
     password = data.password
+    name = data.name
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
+    
     db = auth_utils.read_db()
     if any(u["email"] == email for u in db["users"]):
         raise HTTPException(status_code=400, detail="User already exists")
+    
     hashed_pwd = auth_utils.get_password_hash(password)
-    db["users"].append({"email": email, "password": hashed_pwd, "role": "user"})
+    db["users"].append({
+        "name": name,
+        "email": email, 
+        "password": hashed_pwd, 
+        "role": "user"
+    })
     auth_utils.write_db(db)
     
-    access_token = auth_utils.create_access_token(data={"sub": email, "role": "user"})
+    access_token = auth_utils.create_access_token(data={"sub": email, "role": "user", "name": name})
     return {
         "access_token": access_token, 
         "token_type": "bearer", 
         "role": "user",
+        "name": name,
         "message": "User registered successfully"
     }
 
@@ -299,27 +311,38 @@ def login_user(data: UserLoginReq):
     user = next((u for u in db["users"] if u["email"] == email), None)
     if not user or not auth_utils.verify_password(password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    access_token = auth_utils.create_access_token(data={"sub": user["email"], "role": "user"})
-    return {"access_token": access_token, "token_type": "bearer", "role": "user"}
+    
+    name = user.get("name", "User")
+    access_token = auth_utils.create_access_token(data={"sub": user["email"], "role": "user", "name": name})
+    return {"access_token": access_token, "token_type": "bearer", "role": "user", "name": name}
 
 @router.post("/register-admin")
 def register_admin(data: AdminRegisterReq):
     email = data.email
     password = data.password
+    name = data.name
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
+    
     db = auth_utils.read_db()
     if any(a["email"] == email for a in db["admins"]):
         raise HTTPException(status_code=400, detail="Admin already exists")
+    
     hashed_pwd = auth_utils.get_password_hash(password)
-    db["admins"].append({"email": email, "password": hashed_pwd, "role": "admin"})
+    db["admins"].append({
+        "name": name,
+        "email": email, 
+        "password": hashed_pwd, 
+        "role": "admin"
+    })
     auth_utils.write_db(db)
     
-    access_token = auth_utils.create_access_token(data={"sub": email, "role": "admin"})
+    access_token = auth_utils.create_access_token(data={"sub": email, "role": "admin", "name": name})
     return {
         "access_token": access_token, 
         "token_type": "bearer", 
         "role": "admin",
+        "name": name,
         "message": "Admin registered successfully"
     }
 
@@ -331,5 +354,134 @@ def login_admin(data: AdminLoginReq):
     admin = next((a for a in db["admins"] if a["email"] == email), None)
     if not admin or not auth_utils.verify_password(password, admin["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    access_token = auth_utils.create_access_token(data={"sub": admin["email"], "role": "admin"})
-    return {"access_token": access_token, "token_type": "bearer", "role": "admin"}
+    
+    name = admin.get("name", "Administrator")
+    access_token = auth_utils.create_access_token(data={"sub": admin["email"], "role": "admin", "name": name})
+    return {"access_token": access_token, "token_type": "bearer", "role": "admin", "name": name}
+
+from ..services.analytics_service import compute_safety_score_and_trends, get_rising_crimes
+import json
+
+@router.get("/safety-score")
+def get_safety_score(district: str, state: str = "Maharashtra"):
+    data = _get_data(state)
+    return compute_safety_score_and_trends(data, district)
+
+@router.get("/admin/insights")
+def get_insights(state: str = "Maharashtra"):
+    data = _get_data(state)
+    rising = get_rising_crimes(data)
+    
+    # Auto insight text generator
+    if rising:
+        top = rising[0]
+        text = f"{top['type']} increased by {top['growth_pct']}% recently."
+    else:
+        text = "No significant recent increases detected."
+        
+    return {
+        "rising_crimes": rising,
+        "auto_insight": text
+    }
+
+# COMPLAINTS DB
+COMPLAINTS_FILE = Path(__file__).resolve().parents[2] / 'db' / 'complaints_db.json'
+
+def _read_complaints():
+    if not COMPLAINTS_FILE.exists():
+        return {"complaints": []}
+    with COMPLAINTS_FILE.open('r', encoding='utf-8') as f:
+        return json.load(f)
+
+def _write_complaints(db):
+    with COMPLAINTS_FILE.open('w', encoding='utf-8') as f:
+        json.dump(db, f, indent=2)
+
+class ComplaintReq(BaseModel):
+    # This remains for reference but the route will use Form() parameters
+    pass
+
+import uuid
+
+@router.post("/complaints")
+async def submit_complaint(
+    name: str = Form(...),
+    phone: str = Form(...),
+    email: Optional[str] = Form(None),
+    crime_type: str = Form(...),
+    description: str = Form(...),
+    location: str = Form(...),
+    state: Optional[str] = Form("Maharashtra"),
+    district: Optional[str] = Form("Unknown"),
+    lat: Optional[float] = Form(0.0),
+    lng: Optional[float] = Form(0.0),
+    image: Optional[UploadFile] = File(None),
+    current_user: dict = Depends(get_current_user)
+):
+    db = _read_complaints()
+    image_url = None
+
+    if image and image.filename:
+        # Save image to uploads
+        ext = image.filename.split('.')[-1]
+        img_id = str(uuid.uuid4())
+        img_filename = f"{img_id}.{ext}"
+        dest = Path(__file__).resolve().parent.parent.parent / "uploads" / img_filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        contents = await image.read()
+        dest.write_bytes(contents)
+        image_url = f"/uploads/{img_filename}"
+
+    new_comp = {
+        "id": str(uuid.uuid4()),
+        "user_email": current_user["email"],
+        "name": name,
+        "phone": phone,
+        "email": email or current_user["email"],
+        "crime_type": crime_type,
+        "description": description,
+        "location": location,
+        "state": state,
+        "district": district,
+        "lat": lat,
+        "lng": lng,
+        "image_url": image_url,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "pending"
+    }
+    db["complaints"].append(new_comp)
+    _write_complaints(db)
+    return {"message": "Complaint submitted successfully", "complaint": new_comp}
+
+@router.get("/complaints")
+def get_complaints(state: Optional[str] = None, status: Optional[str] = None):
+    db = _read_complaints()
+    comps = db.get("complaints", [])
+    if state:
+        comps = [c for c in comps if c.get("state", "").lower() == state.lower()]
+    if status:
+        comps = [c for c in comps if c.get("status") == status]
+    return {"complaints": comps}
+
+@router.get("/my-complaints")
+def get_my_complaints(current_user: dict = Depends(get_current_user)):
+    db = _read_complaints()
+    comps = db.get("complaints", [])
+    # Return ONLY complaints belonging to this user
+    user_comps = [c for c in comps if c.get("user_email") == current_user["email"]]
+    # Sort by timestamp descending (newest first)
+    user_comps.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return {"complaints": user_comps}
+
+@router.patch("/complaints/{complaint_id}/status")
+def update_complaint_status(complaint_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    db = _read_complaints()
+    for c in db.get("complaints", []):
+        if c.get("id") == complaint_id:
+            c["status"] = "resolved"
+            _write_complaints(db)
+            return {"message": "Status updated to resolved"}
+    raise HTTPException(status_code=404, detail="Complaint not found")
+

@@ -1,8 +1,10 @@
 # backend/app/main.py
 # FastAPI application entrypoint for the crime analytics dashboard.
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -27,6 +29,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount the static uploads directory
+uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.include_router(router)
 app.include_router(news.router)

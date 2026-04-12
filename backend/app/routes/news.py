@@ -5,8 +5,8 @@ from typing import List, Dict, Any
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
-@router.get("/{city}")
-def fetch_news(city: str):
-    """Fetch crime news for a given city."""
-    news = get_crime_news(city)
+@router.get("/")
+def fetch_news(q: str):
+    """Fetch crime news using a query parameter (e.g., ?q=Mumbai robbery)."""
+    news = get_crime_news(q)
     return news

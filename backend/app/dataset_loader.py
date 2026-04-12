@@ -50,12 +50,17 @@ def load_raw(path: Path | str | None = None) -> List[Dict[str, Any]]:
     return _read_csv(source)
 
 
-def load_processed() -> List[Dict[str, Any]]:
-    """Load the processed dataset from disk, processing it if needed."""
+def load_processed(state: str = "maharashtra") -> List[Dict[str, Any]]:
+    """Load the processed dataset from disk, for a particular state."""
     ensure_dirs()
-    if not PROCESSED_FILE.exists():
-        return process_and_save()
-    return _read_csv(PROCESSED_FILE)
+    state_file = PROCESSED_DIR / f"{state.lower()}_crimes_processed.csv"
+    if not state_file.exists():
+        # Fallback to maharashtra existing file if name differs temporarily or if it doesn't exist
+        fallback_file = PROCESSED_DIR / "maharashtra_crimes_processed.csv"
+        if state.lower() == "maharashtra" and fallback_file.exists():
+            return _read_csv(fallback_file)
+        return []
+    return _read_csv(state_file)
 
 
 def process_and_save(source_csv: Path | str | None = None) -> List[Dict[str, Any]]:

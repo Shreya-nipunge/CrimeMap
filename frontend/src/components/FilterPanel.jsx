@@ -18,7 +18,7 @@ const searchClass =
   'text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 ' +
   'focus:ring-2 focus:ring-blue-500/30 transition-all duration-200';
 
-const DEFAULT_FILTERS = { crime_type: '', region: '', year: '', gender: '' };
+const DEFAULT_FILTERS = { state: 'Maharashtra', crime_type: '', region: '', year: '', gender: '' };
 
 export default function FilterPanel({ filters, onFilterChange, onLocationSelect }) {
   const f = filters ?? DEFAULT_FILTERS;
@@ -29,7 +29,7 @@ export default function FilterPanel({ filters, onFilterChange, onLocationSelect 
 
   const clearAll = () => onFilterChange(DEFAULT_FILTERS);
 
-  const hasActive = [f.crime_type, f.region, f.year, f.gender].some(Boolean);
+  const hasActive = [f.crime_type, f.region, f.year, f.gender].some(Boolean) || f.state !== 'Maharashtra';
 
   const searchRef = useRef(null);
   const autocompleteRef = useRef(null);
@@ -83,7 +83,23 @@ export default function FilterPanel({ filters, onFilterChange, onLocationSelect 
           <span className="text-sm font-medium text-slate-400 tracking-wide uppercase">Filters:</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 w-full md:w-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 w-full md:w-auto">
+          {/* State Filter */}
+          <div className="relative group">
+            <select
+              className={selectClass}
+              value={f.state || 'Maharashtra'}
+              onChange={(e) => handleChange('state', e.target.value)}
+            >
+              {['Maharashtra', 'Karnataka', 'Delhi'].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-500 group-hover:text-blue-400 transition-colors">
+              <ChevronDown size={18} />
+            </div>
+          </div>
+
           {/* Crime Type */}
           <div className="relative group">
             <select

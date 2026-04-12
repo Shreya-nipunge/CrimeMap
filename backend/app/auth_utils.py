@@ -45,9 +45,16 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict):
-    to_encode = data.copy()
-    # Using timezone-aware datetime for better compatibility
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    try:
+        to_encode = data.copy()
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        
+        # Consistent return as string (PyJWT 1.x returns bytes, 2.x returns str)
+        if isinstance(encoded_jwt, bytes):
+            return encoded_jwt.decode('utf-8')
+        return str(encoded_jwt)
+    except Exception as e:
+        print(f"JWT Encoding Error: {str(e)}")
+        raise e

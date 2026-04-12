@@ -1,29 +1,34 @@
-// frontend/src/components/CrimeNewsPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, Calendar, MapPin, AlertTriangle, Newspaper } from 'lucide-react';
+import { ExternalLink, Calendar, MapPin, AlertTriangle, Newspaper, Search } from 'lucide-react';
 import { getNews } from '../services/api.js';
 
-const CrimeNewsPanel = ({ city }) => {
+const CrimeNewsPanel = ({ initialQuery }) => {
+  const [query, setQuery] = useState(initialQuery || '');
+  const [searchInput, setSearchInput] = useState(initialQuery || '');
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!city) return;
+    if (!query) return;
 
     const fetchNews = async () => {
       setLoading(true);
       setError(null);
       try {
-        const cityQuery = city.split(',')[0].trim();
-        const data = await getNews(cityQuery);
+        const data = await getNews(query);
         
-        // Strict client-side filtering to ensure city relevance
-        const cityName = city.split(',')[0].trim().toLowerCase();
-        const filteredData = data.filter(article => 
-          (article.title && article.title.toLowerCase().includes(cityName)) || 
-          (article.description && article.description.toLowerCase().includes(cityName))
-        );
+        // Looser client-side filtering since we are doing keyword searches
+        const qParts = query.toLowerCase().split(' ').filter(p => p.length > 3);
+        
+        let filteredData = data;
+        if (qParts.length > 0) {
+           filteredData = data.filter(article => {
+             const t = (article.title || '').toLowerCase();
+             const d = (article.description || '').toLowerCase();
+             return qParts.some(p => t.includes(p) || d.includes(p));
+           });
+        }
         
         setNews(filteredData.length > 0 ? filteredData.slice(0, 6) : data.slice(0, 6));
       } catch (err) {
@@ -35,25 +40,42 @@ const CrimeNewsPanel = ({ city }) => {
     };
 
     fetchNews();
-  }, [city]);
+  }, [query]);
 
-  if (!city) return null;
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchInput.trim()) {
+       setQuery(searchInput.trim());
+    }
+  };
 
   return (
-    <div className="w-full mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
+          <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/20 shadow-[0_0_15px_-3px_rgba(37,99,235,0.3)]">
             <Newspaper className="text-blue-400" size={20} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Latest Crime News</h2>
+            <h2 className="text-xl font-bold text-white tracking-tight">OSINT Feed</h2>
             <p className="text-slate-500 text-xs flex items-center gap-1">
-              <MapPin size={12} /> Recent incidents in {city.split(',')[0].trim()}
+              Top intelligence reports matching: <span className="text-slate-300 font-semibold">{query}</span>
             </p>
           </div>
         </div>
-        <div className="h-px flex-grow bg-gradient-to-r from-blue-500/20 to-transparent ml-6 hidden md:block" />
+        
+        <form onSubmit={handleSearch} className="relative w-full md:w-auto">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+            <input 
+               type="text" 
+               value={searchInput}
+               onChange={(e) => setSearchInput(e.target.value)}
+               placeholder="Search e.g. 'Mumbai cyber crime'"
+               className="w-full md:w-72 bg-slate-900 border border-slate-700 rounded-lg p-2 pl-9 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        </form>
       </div>
 
       {loading ? (

@@ -1,4 +1,4 @@
-# 🚔 CrimeMap
+# 🚨 CrimeMap: From Crime Data → Crime Intelligence
 
 A comprehensive crime analytics and visualization solution. CrimeMap enables stakeholders to analyze crime-related data, identify patterns, and visualize hotspots across Maharashtra districts to support informed decision-making.
 

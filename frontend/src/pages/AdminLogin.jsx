@@ -32,7 +32,8 @@ export default function AdminLogin() {
     try {
       const data = await loginAdmin(formData.email, formData.password);
       localStorage.setItem('token', data.access_token);
-      localStorage.setItem('userRole', data.role);
+      localStorage.setItem('role', data.role);
+      localStorage.setItem('userName', data.name);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Admin login failed. Please check your credentials.');

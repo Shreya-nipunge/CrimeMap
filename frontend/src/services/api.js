@@ -6,7 +6,7 @@ import axios from "axios";
 // Use environment variable for the base API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   timeout: 15000,
   headers: { "Content-Type": "application/json" },
@@ -26,6 +26,7 @@ apiClient.interceptors.request.use((config) => {
 // Optional query param: district (substring match).
 export const getCrimes = async (filters = {}) => {
   const params = {};
+  if (filters.state) params.state = filters.state;
   if (filters.region) params.region = filters.region;
   if (filters.crime_type) params.crime_type = filters.crime_type;
   if (filters.gender) params.gender = filters.gender;
@@ -35,35 +36,39 @@ export const getCrimes = async (filters = {}) => {
 };
 
 // GET /api/summary — KPI card data
-export const getSummary = async (year = null) => {
-  const params = year ? { year } : {};
+export const getSummary = async (state = "Maharashtra", year = null) => {
+  const params = { state };
+  if (year) params.year = year;
   const response = await apiClient.get("/summary", { params });
   return response.data;
 };
 
 // GET /api/by-type — bar chart data
-export const getByType = async (year = null) => {
-  const params = year ? { year } : {};
+export const getByType = async (state = "Maharashtra", year = null) => {
+  const params = { state };
+  if (year) params.year = year;
   const response = await apiClient.get("/by-type", { params });
   return response.data;
 };
 
 // GET /api/trend — monthly trend line data
-export const getTrend = async () => {
-  const response = await apiClient.get("/trend");
+export const getTrend = async (state = "Maharashtra") => {
+  const params = { state };
+  const response = await apiClient.get("/trend", { params });
   return response.data;
 };
 
 // GET /api/hotspots — top 5 hotspot cards
-export const getHotspots = async (year = null) => {
-  const params = year ? { year } : {};
+export const getHotspots = async (state = "Maharashtra", year = null) => {
+  const params = { state };
+  if (year) params.year = year;
   const response = await apiClient.get("/hotspots", { params });
   return response.data;
 };
 
-// GET /api/news/:city — fetch crime news for a city
-export const getNews = async (city) => {
-  const response = await apiClient.get(`/news/${city}`);
+// GET /api/news?q={query} — fetch crime news
+export const getNews = async (query) => {
+  const response = await apiClient.get("/news", { params: { q: query } });
   return response.data;
 };
 // POST /api/upload — upload a new CSV raw dataset to refresh the heatmap data
@@ -77,14 +82,56 @@ export const uploadDataset = async (file) => {
   return response.data;
 };
 
+export const getSafetyScore = async (district, state = "Maharashtra") => {
+  const response = await apiClient.get("/safety-score", { params: { district, state } });
+  return response.data;
+};
+
+export const getAdminInsights = async (state = "Maharashtra") => {
+  const response = await apiClient.get("/admin/insights", { params: { state } });
+  return response.data;
+};
+
+export const submitComplaint = async (data) => {
+  // If data is a FormData object (for images)
+  const isFormData = data instanceof FormData;
+  const response = await apiClient.post("/complaints", data, {
+    headers: isFormData ? { "Content-Type": "multipart/form-data" } : {}
+  });
+  return response.data;
+};
+
+export const getComplaints = async (state = null, status = null) => {
+  const params = {};
+  if (state) params.state = state;
+  if (status) params.status = status;
+  const response = await apiClient.get("/complaints", { params });
+  return response.data;
+};
+
+export const getAdminComplaints = async () => {
+  const response = await apiClient.get('/complaints');
+  return response.data;
+};
+
+export const getMyComplaints = async () => {
+  const response = await apiClient.get('/my-complaints');
+  return response.data;
+};
+
+export const updateComplaintStatus = async (id) => {
+  const response = await apiClient.patch(`/complaints/${id}/status`);
+  return response.data;
+};
+
 // AUTH API calls
 export const loginUser = async (email, password) => {
   const response = await apiClient.post("/login-user", { email, password });
   return response.data;
 };
 
-export const registerUser = async (email, password) => {
-  const response = await apiClient.post("/register-user", { email, password });
+export const registerUser = async (email, password, name) => {
+  const response = await apiClient.post("/register-user", { email, password, name });
   return response.data;
 };
 
@@ -93,7 +140,7 @@ export const loginAdmin = async (email, password) => {
   return response.data;
 };
 
-export const registerAdmin = async (email, password) => {
-  const response = await apiClient.post("/register-admin", { email, password });
+export const registerAdmin = async (email, password, name) => {
+  const response = await apiClient.post("/register-admin", { email, password, name });
   return response.data;
 };

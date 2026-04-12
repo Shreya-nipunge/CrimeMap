@@ -10,10 +10,12 @@ import PieDistribution from '../components/PieDistribution.jsx';
 import HotspotCards from '../components/HotspotCards.jsx';
 import SafetyInsights from '../components/SafetyInsights.jsx';
 import CrimeNewsPanel from '../components/CrimeNewsPanel.jsx';
+import ComplaintForm from '../components/ComplaintForm.jsx';
+import AdminDashboardPanels from '../components/AdminDashboardPanels.jsx';
 import * as api from '../services/api.js';
 import { ShieldAlert, Bell, User as UserIcon } from 'lucide-react';
 
-const DEFAULT_FILTERS = { crime_type: '', region: '', year: '', gender: '' };
+const DEFAULT_FILTERS = { state: 'Maharashtra', crime_type: '', region: '', year: '', gender: '' };
 
 export default function Dashboard() {
   const [filters, setFilters]         = useState(DEFAULT_FILTERS);
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [barData, setBarData]         = useState({ labels: [], values: [] });
   const [trendData, setTrendData]     = useState([]);
   const [hotspotData, setHotspotData] = useState([]);
+  const [complaintsData, setComplaintsData] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const navigate = useNavigate();
@@ -50,14 +53,14 @@ export default function Dashboard() {
   // Fetch initial data (Trend line remains stable across all-district filters)
   useEffect(() => {
     let cancelled = false;
-    api.getTrend()
+    api.getTrend(filters.state)
       .then((trend) => {
         if (cancelled) return;
         setTrendData(trend);
       })
       .catch(console.error);
     return () => { cancelled = true; };
-  }, []);
+  }, [filters.state]);
 
   // Fetch crimes, summary, hotspots and stats by type on filter change
   useEffect(() => {
@@ -67,16 +70,18 @@ export default function Dashboard() {
     // Fetch all filter-dependent data in parallel
     Promise.all([
       api.getCrimes(filters),
-      api.getSummary(filters.year),
-      api.getByType(filters.year),
-      api.getHotspots(filters.year)
+      api.getSummary(filters.state, filters.year),
+      api.getByType(filters.state, filters.year),
+      api.getHotspots(filters.state, filters.year),
+      api.getComplaints(filters.state)
     ])
-      .then(([crimesResult, summaryResult, byTypeResult, hotspotsResult]) => {
+      .then(([crimesResult, summaryResult, byTypeResult, hotspotsResult, complaintsResult]) => {
         if (cancelled) return;
         setCrimeData(crimesResult.data);
         setSummaryData(summaryResult);
         setBarData(byTypeResult);
         setHotspotData(hotspotsResult);
+        setComplaintsData(complaintsResult.complaints || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -109,9 +114,24 @@ export default function Dashboard() {
           </div>
           <div>
             <h1 className="text-lg font-bold leading-none tracking-tight">CrimeMap</h1>
-            <p className="text-slate-500 text-[10px] tracking-widest uppercase mt-0.5">Regional Analytics Platform</p>
+            <p className="text-slate-500 text-[10px] tracking-[0.08em] uppercase mt-0.5 font-semibold">From Crime Data → Crime Intelligence</p>
           </div>
         </div>
+
+        {/* Top Risk District Banner */}
+        {hotspotData.length > 0 && (
+          <div className="hidden lg:flex items-center mx-4 flex-shrink-0 animate-in fade-in zoom-in duration-500">
+            <div className="bg-red-500/10 border border-red-500/20 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-[0_0_15px_-3px_rgba(239,68,68,0.2)]">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="text-[11px] font-bold text-red-400 uppercase tracking-wider">Highest Risk:</span>
+              <span className="text-[12px] font-bold text-slate-100">{hotspotData[0].area}</span>
+              <span className="text-[11px] text-slate-400 ml-1">({hotspotData[0].count} incidents)</span>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-4">
           {isAdmin && (
@@ -166,7 +186,14 @@ export default function Dashboard() {
         <section className="flex flex-col lg:flex-row gap-6 h-[550px]">
           {/* Left: Interactive Map (70%) */}
           <div className="lg:w-[70%] h-full">
-            <MapView crimes={crimeData} loading={loading} selectedLocation={selectedLocation} onLocationSelect={setSelectedLocation} />
+            <MapView 
+              crimes={crimeData} 
+              complaints={complaintsData}
+              stateName={filters.state}
+              loading={loading} 
+              selectedLocation={selectedLocation} 
+              onLocationSelect={setSelectedLocation} 
+            />
           </div>
 
           {/* Right: Insights & Hotspots Panel (30%) */}
@@ -195,12 +222,21 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Row 5: Crime News Feed (Users Only) */}
-        {!isAdmin && (
-          <section className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            <CrimeNewsPanel city={selectedLocation?.label || 'Maharashtra'} />
-          </section>
-        )}
+        {/* Row 5: Action & Intel Panels */}
+        <section className="animate-in fade-in slide-in-from-bottom-4 duration-1000 mt-6 min-h-[400px]">
+          {isAdmin ? (
+            <AdminDashboardPanels stateName={filters.state} />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+              <div className="h-full">
+                <ComplaintForm stateName={filters.state} />
+              </div>
+              <div className="h-full">
+                <CrimeNewsPanel city={selectedLocation?.label || 'Maharashtra'} />
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Footer info */}
         <footer className="pt-4 pb-8 flex justify-between items-center text-slate-600 text-[10px] uppercase tracking-[0.2em] font-medium border-t border-slate-800/50">

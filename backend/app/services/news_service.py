@@ -11,17 +11,14 @@ env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-def get_crime_news(city: str) -> List[Dict[str, Any]]:
-    """Fetch recent crime news for a specific city using NewsAPI."""
-    if not city:
+def get_crime_news(query: str) -> List[Dict[str, Any]]:
+    """Fetch recent crime news using NewsAPI via keyword matching."""
+    if not query:
         return []
 
-    # Mandatory city name + any of the crime keywords for stricter filtering
-    q = f'+{city} AND (crime OR police OR robbery OR arrested OR murder OR investigation OR FIR)'
-    
     url = "https://newsapi.org/v2/everything"
     params = {
-        "q": q,
+        "q": query,
         "language": "en",
         "sortBy": "publishedAt",
         "pageSize": 20,  # Increase to allow for stricter filtering
@@ -62,5 +59,5 @@ def get_crime_news(city: str) -> List[Dict[str, Any]]:
         return filtered_articles
 
     except Exception as e:
-        print(f"Error fetching news for {city}: {e}")
+        print(f"Error fetching news for '{query}': {e}")
         return []

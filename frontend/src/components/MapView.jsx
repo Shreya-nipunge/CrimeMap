@@ -7,14 +7,16 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const MAP_CENTER = { lat: 19.3919, lng: 72.8397 };
 const DEFAULT_ZOOM = 12;
 
-export default function MapView({ crimes, loading, selectedLocation, onLocationSelect }) {
+export default function MapView({ crimes, complaints, stateName, loading, selectedLocation, onLocationSelect }) {
   const crimes_data = crimes || [];
+  const complaints_data = complaints || [];
   const containerRef = useRef(null);
   const [map, setMap] = useState(null);
   const [heatmapOn, setHeatmapOn] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const clustererRef = useRef(null);
   const markersRef = useRef([]);
+  const complaintMarkersRef = useRef([]);
   const infoWindowRef = useRef(null);
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -99,7 +101,9 @@ export default function MapView({ crimes, loading, selectedLocation, onLocationS
 
     // Clear existing markers from map and clusterer
     markersRef.current.forEach(marker => marker.setMap(null));
+    complaintMarkersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
+    complaintMarkersRef.current = [];
     if (clustererRef.current) clustererRef.current.clearMarkers();
 
     const newMarkers = crimes_data
@@ -120,42 +124,114 @@ export default function MapView({ crimes, loading, selectedLocation, onLocationS
       marker.set('score', score);
       marker.set('district', c.district);
 
-      marker.addListener("click", () => {
-        const content = `
-          <div style="font-family:'Inter', sans-serif; min-width:220px; padding: 6px; color: #111">
-            <div style="margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 4px">
-              <h3 style="margin:0; font-size:14px; font-weight:700; color:#0E3A64">${c.district}</h3>
-              <p style="margin:2px 0 0; font-size:11px; color:#64748b">Crime Score: <strong>${score}</strong></p>
-            </div>
-            <div style="font-size:11px; color:#334155; line-height:1.4">
-              <p style="margin:0"><strong>Murder:</strong> ${c.murder}</p>
-              <p style="margin:0"><strong>Robbery:</strong> ${c.robbery}</p>
-              <p style="margin:0"><strong>Thefts:</strong> ${c.thefts}</p>
-              <p style="margin:0"><strong>Vehicle Theft:</strong> ${c.vehicle_theft}</p>
-              <p style="margin:0"><strong>Burglary:</strong> ${c.burglary}</p>
-              <p style="margin:0"><strong>Cheating:</strong> ${c.cheating}</p>
-              <p style="margin:0"><strong>Rape:</strong> ${c.rape}</p>
-            </div>
-          </div>
-        `;
-        infoWindowRef.current.setContent(content);
+      marker.addListener("click", async () => {
+        infoWindowRef.current.setContent(`<div style="padding:16px; font-family:sans-serif; color:#334155; font-size:13px; font-weight:600;">Fetching Intelligence...</div>`);
         infoWindowRef.current.open(map, marker);
+        try {
+          const { getSafetyScore } = await import('../services/api.js');
+          const analytics = await getSafetyScore(c.district, stateName || 'Maharashtra');
+          
+          const diffText = analytics.state_avg_diff > 0 
+            ? `<span style="color:#C0392B">+${analytics.state_avg_diff}% vs State Avg</span>` 
+            : `<span style="color:#0EA5E9">${analytics.state_avg_diff}% vs State Avg</span>`;
+            
+          const rankText = `Rank #${analytics.rank} of ${analytics.total} Safest`;
+
+          const trendIcon = analytics.trend === 'Increasing' ? '↑' : analytics.trend === 'Decreasing' ? '↓' : '→';
+          const trendColor = analytics.trend === 'Increasing' ? '#ef4444' : analytics.trend === 'Decreasing' ? '#10b981' : '#64748b';
+
+          // Data Gap Indicator Logic (Mock threshold: High complaints in system, low official score)
+          // Since it's a prototype, we just check if there are 2 or more active complaints in this exact district vs the score.
+          const districtComplaints = complaints_data.filter(comp => comp.district === c.district && comp.status === 'pending').length;
+          const dataGapHtml = (districtComplaints > 0) ? `
+            <div style="margin-top:8px; padding:6px; background-color:#FEF2F2; border:1px solid #FECACA; border-radius:4px;">
+              <p style="margin:0; font-size:10px; font-weight:700; color:#DC2626; display:flex; align-items:center; gap:4px;">
+                ⚠️ High citizen reports, low official data
+              </p>
+            </div>
+          ` : '';
+
+          const content = `
+            <div style="font-family:'Inter', sans-serif; min-width:240px; padding: 4px; color: #111">
+              <div style="margin-bottom:8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px">
+                <h3 style="margin:0 0 6px 0; font-size:16px; font-weight:800; color:#0E3A64">${c.district}</h3>
+                <p style="margin:0; font-size:13px; color:#1e293b; font-weight:600; display:flex; align-items:center;">
+                  Safety Score: <strong>&nbsp;${analytics.score}/100</strong> 
+                  <span style="font-size:10px; color:#475569; padding:2px 6px; background:#f1f5f9; border-radius:4px; margin-left:6px;">${analytics.risk} Risk</span>
+                </p>
+                <p style="margin:6px 0 0; font-size:12px; font-weight:600;">${diffText} | ${rankText}</p>
+                <p style="margin:4px 0 0; font-size:11px; color:#64748b; font-style:italic; font-weight:500;">
+                  Trend: <span style="color:${trendColor}; font-weight:bold">${trendIcon} ${analytics.trend}</span>
+                </p>
+                ${dataGapHtml}
+              </div>
+              <div style="font-size:11px; color:#334155; line-height:1.6">
+                <div style="display:flex; justify-content:space-between;"><span>Murder:</span> <strong>${c.murder}</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Robbery:</span> <strong>${c.robbery}</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Thefts:</span> <strong>${c.thefts}</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Vehicle Theft:</span> <strong>${c.vehicle_theft}</strong></div>
+              </div>
+            </div>
+          `;
+          infoWindowRef.current.setContent(content);
+        } catch (err) {
+          infoWindowRef.current.setContent(`<div style="padding:10px; color:#C0392B;">Intelligence unavailable</div>`);
+        }
       });
 
       return marker;
     });
 
+    const newComplaintMarkers = complaints_data
+      .filter((c) => (c.status === 'pending' || c.status === 'resolved') && c.lat && c.lng)
+      .map((c) => {
+        const marker = new window.google.maps.Marker({
+          position: { lat: Number(c.lat), lng: Number(c.lng) },
+          title: "Citizen Report: " + c.crime_type,
+          map: heatmapOn ? map : null,
+          visible: heatmapOn,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            fillColor: c.status === 'resolved' ? '#10B981' : '#3B82F6',
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: '#FFFFFF',
+            scale: 7
+          },
+        });
+
+        marker.addListener("click", () => {
+          infoWindowRef.current.setContent(`
+            <div style="font-family:'Inter', sans-serif; padding: 6px; max-width:200px;">
+              <span style="background:${c.status === 'resolved' ? '#D1FAE5' : '#DBEAFE'}; color:${c.status === 'resolved' ? '#059669' : '#1D4ED8'}; font-size:10px; font-weight:700; padding:2px 6px; border-radius:12px;">
+                ${c.status === 'resolved' ? 'RESOLVED INTEL' : 'CITIZEN REPORT'}
+              </span>
+              <h3 style="margin:8px 0 4px; font-size:14px; font-weight:700; color:#1e293b">${c.crime_type}</h3>
+              <p style="margin:0; font-size:12px; color:#475569">${c.description}</p>
+              <p style="margin:8px 0 0; font-size:10px; color:#94a3b8; font-style:italic;">Status: <strong>${c.status.toUpperCase()}</strong></p>
+            </div>
+          `);
+          infoWindowRef.current.open(map, marker);
+        });
+        
+        return marker;
+      });
+
     markersRef.current = newMarkers;
+    complaintMarkersRef.current = newComplaintMarkers;
     if (clustererRef.current && newMarkers.length > 0) {
       clustererRef.current.clearMarkers();
       clustererRef.current.addMarkers(newMarkers);
     }
-  }, [crimes_data, map, heatmapOn]);
+  }, [crimes_data, complaints_data, map, heatmapOn, stateName]);
 
   useEffect(() => {
     if (!map) return;
     markersRef.current.forEach((marker) => {
-      const score = marker.get('score');
+      marker.setVisible(heatmapOn);
+      marker.setMap(heatmapOn ? map : null);
+    });
+    complaintMarkersRef.current.forEach((marker) => {
       marker.setVisible(heatmapOn);
       marker.setMap(heatmapOn ? map : null);
     });
@@ -166,7 +242,7 @@ export default function MapView({ crimes, loading, selectedLocation, onLocationS
     if (selectedLocation && map && window.google) {
       const pos = { lat: Number(selectedLocation.lat), lng: Number(selectedLocation.lng) };
       map.panTo(pos);
-      map.setZoom(11); // Slightly closer zoom
+      map.setZoom(13); // Zoom closely into the searched district
 
       // Find the best matching marker
       // 1. Try exact or very close coordinate match
@@ -213,10 +289,33 @@ export default function MapView({ crimes, loading, selectedLocation, onLocationS
           </div>
         </div>
       ) : (!map || loading) ? (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-[#0A1628]/80 backdrop-blur-sm">
-          <div className="flex items-center gap-3 text-slate-400 text-sm">
-            <div className="w-5 h-5 border-2 border-[#0E7C8B] border-t-transparent rounded-full animate-spin" />
-            Initializing Satellite Intelligence…
+        <div className="absolute inset-0 z-[1000] bg-[#0D1E38] p-6 flex flex-col gap-4 animate-pulse pointer-events-none">
+          {/* Skeleton Header */}
+          <div className="flex justify-between items-center opacity-30">
+             <div className="w-1/4 h-6 bg-slate-700 rounded"></div>
+             <div className="w-20 h-6 bg-slate-700 rounded"></div>
+          </div>
+          {/* Skeleton Map Grid */}
+          <div className="flex-1 w-full grid grid-cols-4 grid-rows-3 gap-4 opacity-10 mt-4">
+             <div className="col-span-1 row-span-1 bg-slate-500 rounded-2xl"></div>
+             <div className="col-span-2 row-span-2 bg-slate-400 rounded-2xl"></div>
+             <div className="col-span-1 row-span-3 bg-slate-500 rounded-2xl"></div>
+             <div className="col-span-3 row-span-1 bg-slate-400 rounded-2xl"></div>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="bg-slate-900/80 px-4 py-2 rounded-lg text-xs font-bold text-slate-400 uppercase tracking-[0.2em] shadow-2xl border border-slate-700/50">
+              Loading Satellite Intelligence...
+            </span>
+          </div>
+        </div>
+      ) : crimes_data.length === 0 ? (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#0A1628]/40 backdrop-blur-[2px] pointer-events-none">
+          <div className="bg-[#0D1E38]/90 border border-slate-700 p-4 rounded-xl shadow-2xl flex items-center gap-3">
+             <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xl">📡</div>
+             <div>
+               <p className="text-slate-200 font-bold text-sm">No Signal Detected</p>
+               <p className="text-slate-400 text-xs mt-0.5">No intelligence data available for selected filters in {stateName || 'this region'}.</p>
+             </div>
           </div>
         </div>
       ) : null}
@@ -254,6 +353,22 @@ export default function MapView({ crimes, loading, selectedLocation, onLocationS
             Heatmap
           </label>
           <span className="text-[10px] text-slate-500">{heatmapOn ? 'On' : 'Off'}</span>
+        </div>
+      </div>
+
+      <div className="absolute bottom-6 left-6 z-[1] bg-[#0D1E38]/90 backdrop-blur-md border border-slate-700/50 rounded-xl p-3 shadow-2xl pointer-events-none">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 text-slate-300">
+            <div className="w-3 h-3 rounded-full bg-[#3B82F6]" style={{border: '1.5px solid white'}} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Citizen Report (Pending)</span>
+          </div>
+          <div className="flex items-center gap-3 text-slate-300">
+            <div className="w-3 h-3 rounded-full bg-[#10B981]" style={{border: '1.5px solid white'}} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Citizen Report (Resolved)</span>
+          </div>
+        </div>
+        <div className="mt-3 pt-2 border-t border-slate-800">
+           <p className="text-[9px] text-slate-500 font-medium">Heatmap Source: NCRB Official Data</p>
         </div>
       </div>
 
