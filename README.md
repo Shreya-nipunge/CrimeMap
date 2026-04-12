@@ -1,20 +1,41 @@
-# 🧠 CrimeMap AI — National Crime Intelligence & Decision Support System
+# 🧠 CrimeMap AI  
+### National Crime Intelligence & Decision Support System
 
-**CrimeMap AI** is a production-grade OSINT (Open Source Intelligence) platform designed to transform raw crime statistics into actionable safety intelligence. Built for law enforcement and citizen awareness, it leverages advanced data visualization, real-time news classification, and predictive analytics to identify hotspots and enhance regional safety governance.
+**CrimeMap AI** is an **advanced OSINT-inspired platform** designed to transform regional crime data into actionable safety intelligence. Built for law enforcement and citizen awareness, it leverages interactive visualization, real-time news classification, and **trend analysis** to identify hotspots and enhance regional safety governance.
+
+---
+
+## 🔥 Key Highlights
+
+- 🧠 **Real-time OSINT-based** crime intelligence feed
+- 📍 **Interactive national crime heatmap** with deep-drill analytics
+- 🛡️ **Citizen reporting** with integrated admin verification pipeline
+- ⚡ **Full-stack architecture** powered by FastAPI + React
+
+---
+
+## 📸 Screenshots
+
+### 🗺️ Crime Heatmap
+![Map Placeholder](https://via.placeholder.com/800x400/0F172A/3B82F6?text=Crime+Hotspot+Map+Visual)
+
+### 🧠 Intelligence Feed
+![News Placeholder](https://via.placeholder.com/800x400/0F172A/F97316?text=Live+OSINT+Intelligence+Feed)
 
 ---
 
 ## 🚀 Core Features
 
-### 🛡️ OSINT Intelligence Layer
-*   **Real-Time Classification**: Automatically tags news incidents with **Severity Levels** (High/Medium/Low) using NLP markers.
+### 📡 OSINT Intelligence Layer
+*   **Real-Time Classification**: Automatically tags news incidents with **Severity Levels** (High/Medium/Low) using pattern-based markers.
 *   **Source Credibility**: Distinguishes between **Verified OSINT** (from trusted national outlets) and signal analysis.
 *   **Intelligent Caching**: Optimized with a 5-minute TTL caching layer to protect API integrity and ensure high responsiveness.
+*   > **Note**: News data is powered by NewsAPI (free tier) and may have rate limits during high-frequency usage.
 
-### 📍 Advanced Heatmap & Analytics
+### 📍 Heatmap & Trend Analysis
 *   **Hotspot Detection**: Dynamic crime density visualization across states and districts.
-*   **Decision Support**: AI-driven insights highlighting "Actionable Intelligence" and "Community Gap Alerts."
-*   **Regional Benchmarking**: Contrast safety scores between different states (e.g., Maharashtra vs Delhi).
+*   **Decision Support**: **Data-driven insights** highlighting "Actionable Intelligence" and "Community Gap Alerts."
+*   **Regional Benchmarking**: Contrast safety scores between different states (e.g., Maharashtra vs Delhi) based on historical patterns.
 
 ### 📋 Citizen Intelligence Desk
 *   **Verified Reporting**: Secure portal for citizens to submit incident reports.
@@ -29,7 +50,6 @@
 - **Backend**: FastAPI (Python), Uvicorn, Python-Multipart.
 - **Security**: JWT Authentication, PBKDF2 Password Hashing (Passlib).
 - **Data Engine**: Pandas for high-speed regional aggregation and analytical compute.
-- **Intelligence**: NewsAPI with custom OSINT enrichment layers.
 
 ---
 
@@ -90,7 +110,7 @@
 ### 👮 Admin Flow
 1. **Login** with specialized admin credentials.
 2. Access the **Intelligence Desk** to review, verify, or reject incoming reports.
-3. View **Analytical Insights** to identify rising crime trends and resource gaps.
+3. View **Data Insights** to identify rising crime trends and resource gaps.
 
 ---
 
