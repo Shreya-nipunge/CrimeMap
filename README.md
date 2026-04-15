@@ -33,10 +33,10 @@ CrimeMap AI transforms fragmented regional crime data into a live, actionable sa
 ## Screenshots
 
 ### 🗺️ Crime Heatmap
-![Crime Heatmap](./screenshots/heatmap.png)
+![Crime Heatmap](./assets/Heatmap.png)
 
 ### 🧠 Intelligence Feed
-![Intelligence Feed](./screenshots/intelligence-feed.png)
+![Intelligence Feed](./assets/Intelligence-feed.png)
 
 ---
 
