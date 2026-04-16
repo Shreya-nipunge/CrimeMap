@@ -9,17 +9,6 @@ CrimeMap AI transforms fragmented regional crime data into a live, actionable sa
 
 ---
 
-## 📋 Table of Contents
-- [Key Highlights](#key-highlights)
-- [Core Features](#core-features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Usage Guide](#usage-guide)
-- [Team](#team)
-- [License](#license)
-
----
-
 ## ✨ Key Highlights
 
 | | Feature | Description |
@@ -143,11 +132,11 @@ Frontend will be live at `http://localhost:5173`
 
 | Name | GitHub |
 |---|---|
-| Shreya Nipunge | [@shreyanipunge](https://github.com/shreyanipunge) |
-| Kirtan Devadiga | [@kirtandevadiga](https://github.com/kirtandevadiga) |
-| Mayuri Gade | [@mayurigade](https://github.com/mayurigade) |
+| Shreya Nipunge | [@shreyanipunge](https://github.com/Shreya-nipunge) |
+| Kirtan Devadiga | [@kirtandevadiga](https://github.com/Kirtan-pc) |
+| Mayuri Gade | [@mayurigade](https://github.com/mayurigade-hub) |
 | Shreya Dandekar | [@shreyadandekar](https://github.com/shreyadandekar) |
-| Lata Choudhary | [@latachoudhary](https://github.com/latachoudhary) |
+| Lata Choudhary | [@latachoudhary](https://github.com/latachoudhary18) |
 
 ---
 
