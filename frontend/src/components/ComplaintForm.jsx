@@ -15,7 +15,8 @@ export default function ComplaintForm({ prefillState, prefillDistrict }) {
     district: prefillDistrict || '',
     lat: 0,
     lng: 0,
-    state: prefillState || 'Maharashtra'
+    state: prefillState || 'Maharashtra',
+    share_description: true
   });
   
   const [imageFile, setImageFile] = useState(null);
@@ -95,6 +96,7 @@ export default function ComplaintForm({ prefillState, prefillDistrict }) {
       payload.append("district", formData.district);
       payload.append("lat", formData.lat);
       payload.append("lng", formData.lng);
+      payload.append("share_description", String(formData.share_description));
       
       if (imageFile) {
         payload.append("image", imageFile);
@@ -210,6 +212,18 @@ export default function ComplaintForm({ prefillState, prefillDistrict }) {
               className="w-full min-h-[120px] bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
               required
             />
+            <div className="mt-3 flex items-center gap-3 bg-slate-900/40 p-3 rounded-lg border border-slate-800/50">
+               <label className="relative inline-flex items-center cursor-pointer">
+                 <input 
+                   type="checkbox" 
+                   checked={formData.share_description} 
+                   onChange={e => setFormData({...formData, share_description: e.target.checked})}
+                   className="sr-only peer" 
+                 />
+                 <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+               </label>
+               <span className="text-xs font-medium text-slate-300">Share this description on the public map? <span className="text-slate-500 font-normal">(Disable to keep details private)</span></span>
+            </div>
           </div>
 
           {/* Image Upload Block */}

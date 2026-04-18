@@ -134,26 +134,30 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
     return { minScore: min, maxScore: max, rankedCrimes: sorted };
   }, [crimes]);
 
-  const getHeatIcon = (crimeScore, hasAlert) => {
+  const getHeatIcon = (crimeScore, hasAlert, adminResponsiveness) => {
     const score = Number(crimeScore);
     const range = (maxScore - minScore) || 1;
     const normalized = (score - minScore) / range;
     
-    console.log(`[MapView Debug] Validating - raw=${crimeScore}, parsed=${score}, min=${minScore}, max=${maxScore}, normalized=${normalized.toFixed(3)}`);
+    // console.log(`[MapView Debug] Validating - raw=${crimeScore}, parsed=${score}, min=${minScore}, max=${maxScore}, normalized=${normalized.toFixed(3)}`);
     
     const color = normalized > 0.66 ? '#ef4444' : normalized > 0.33 ? '#f97316' : '#eab308';
     const size = Math.min(Math.max((normalized * 25) + 20, 20), 45);
 
     const svg = `
-      <svg width="${size + 20}" height="${size + 20}" viewBox="0 0 ${size + 20} ${size + 20}" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="${(size + 20) / 2}" cy="${(size + 20) / 2}" r="${size / 2}" fill="${color}" fill-opacity="0.3">
+      <svg width="${size + 20}" height="${size + 24}" viewBox="0 0 ${size + 20} ${size + 24}" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="${(size + 20) / 2}" cy="${(size + 20) / 2 + 4}" r="${size / 2}" fill="${color}" fill-opacity="0.3">
           <animate attributeName="r" from="${size / 2.5}" to="${size / 2.1}" dur="1.5s" repeatCount="indefinite" />
           <animate attributeName="fill-opacity" from="0.4" to="0.1" dur="1.5s" repeatCount="indefinite" />
         </circle>
-        <circle cx="${(size + 20) / 2}" cy="${(size + 20) / 2}" r="${size / 3}" fill="${color}" stroke="white" stroke-width="2" />
+        <circle cx="${(size + 20) / 2}" cy="${(size + 20) / 2 + 4}" r="${size / 3}" fill="${color}" stroke="white" stroke-width="2" />
         ${hasAlert ? `
-          <circle cx="${(size + 20) / 2 + size / 4}" cy="${(size + 20) / 2 - size / 4}" r="8" fill="#ef4444" stroke="white" stroke-width="1.5" />
-          <text x="${(size + 20) / 2 + size / 4}" y="${(size + 20) / 2 - size / 4 + 3}" font-family="Arial" font-size="8" font-weight="bold" fill="white" text-anchor="middle">!</text>
+          <circle cx="${(size + 20) / 2 + size / 4}" cy="${(size + 20) / 2 - size / 4 + 4}" r="8" fill="#ef4444" stroke="white" stroke-width="1.5" />
+          <text x="${(size + 20) / 2 + size / 4}" y="${(size + 20) / 2 - size / 4 + 7}" font-family="Arial" font-size="8" font-weight="bold" fill="white" text-anchor="middle">!</text>
+        ` : ''}
+        ${adminResponsiveness === 'LOW' ? `
+          <circle cx="${(size + 20) / 2 - size / 4}" cy="${(size + 20) / 2 - size / 4 + 4}" r="8" fill="#f97316" stroke="white" stroke-width="1.5" />
+          <text x="${(size + 20) / 2 - size / 4}" y="${(size + 20) / 2 - size / 4 + 6.5}" font-family="Arial" font-size="7" fill="white" text-anchor="middle">⚠️</text>
         ` : ''}
       </svg>
     `;
@@ -165,7 +169,9 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
   };
 
   const getComplaintIcon = (status) => {
-    const color = status === 'resolved' ? '#10b981' : '#3b82f6';
+    let color = '#a855f7'; // Purple -> UNVERIFIED / pending
+    if (status === 'VERIFIED' || status === 'resolved') color = '#10b981'; // Green
+    else if (status === 'UNDER_REVIEW') color = '#3b82f6'; // Blue
     const svg = `
       <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
         <circle cx="8" cy="8" r="6" fill="${color}" stroke="white" stroke-width="2"/>
@@ -190,7 +196,7 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
     const crimeMarkersList = crimes.map((crime) => {
       const marker = new window.google.maps.Marker({
         position: { lat: Number(crime.lat), lng: Number(crime.lng) },
-        icon: getHeatIcon(crime.crime_score, gapAlerts.some(a => a.district === crime.district)),
+        icon: getHeatIcon(crime.crime_score, gapAlerts.some(a => a.district === crime.district), crime.admin_responsiveness),
         title: crime.district,
         map: map,
         zIndex: 1
@@ -282,15 +288,28 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
                   <>
                     <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-700/50 pr-8">
                       <h4 className="text-sm font-black m-0 uppercase text-slate-100 flex-1">{selectedMarker.crime_type}</h4>
-                      <span className={`text-[9px] ml-2 px-2 py-1 rounded font-black uppercase tracking-wider ${selectedMarker.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                      <span className={`text-[9px] ml-2 px-2 py-1 rounded font-black uppercase tracking-wider ${
+                          selectedMarker.status === 'VERIFIED' || selectedMarker.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : selectedMarker.status === 'UNDER_REVIEW' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                      }`}>
                         {selectedMarker.status}
                       </span>
+                      {selectedMarker.confidence && (
+                         <span className="text-[9px] ml-1 px-2 py-1 rounded font-black uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                           {selectedMarker.confidence} CONF
+                         </span>
+                      )}
                     </div>
                     <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-800 mb-3">
-                      <p className="text-xs text-slate-300 italic">"{selectedMarker.description}"</p>
+                      {selectedMarker.share_description !== false ? (
+                        <p className="text-xs text-slate-300 italic">"{selectedMarker.description}"</p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic p-1">Citizen chose to keep description private.</p>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-500 space-y-1.5 flex flex-col items-start bg-slate-900/30 p-2 rounded">
-                      <div className="flex"><span className="font-bold text-slate-400 w-10">By:</span> <span className="text-slate-300">{selectedMarker.name}</span></div>
+                      <div className="flex"><span className="font-bold text-slate-400 w-10">By:</span> <span className="text-slate-300 italic">Classified Citizen</span></div>
                       <div className="flex"><span className="font-bold text-slate-400 w-10">Loc:</span> <span className="text-slate-300 line-clamp-1">{selectedMarker.district}</span></div>
                     </div>
                   </>
@@ -303,12 +322,22 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
                       </span>
                     </div>
                     
-                    {selectedMarker.hasAlert && (
+                    {selectedMarker.hasAlert && selectedMarker.alertDetails && (
                       <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 flex items-start gap-3 w-full">
                         <ShieldAlert size={16} className="text-red-500 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-[11px] font-black text-red-400 uppercase tracking-wider">⚠️ Under-Reporting Alert</p>
-                          <p className="text-[10px] text-red-300 mt-1 leading-relaxed">System variance detected. High citizen reporting volume compared to official records.</p>
+                          <p className="text-[10px] text-red-300 mt-1 leading-relaxed">System variance detected. High citizen reporting volume compared to official records. {selectedMarker.alertDetails.signal_strength ? `(Signal Strength: ${selectedMarker.alertDetails.signal_strength}/100)` : ''}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedMarker.admin_responsiveness === 'LOW' && (
+                      <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4 flex items-start gap-3 w-full animate-in fade-in zoom-in duration-300">
+                        <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">⚠️</span>
+                        <div>
+                          <p className="text-[11px] font-black text-orange-400 uppercase tracking-wider">Administrative Bottleneck ⚠️</p>
+                          <p className="text-[10px] text-orange-300 mt-1 leading-relaxed">The system has flagged a severe backlog of citizen intel items in this jurisdiction that have not been addressed. The active intelligence response rate is critically low at <span className="font-bold font-mono text-orange-200 bg-orange-500/20 px-1 rounded">{((selectedMarker.response_rate || 0) * 100).toFixed(1)}%</span>.</p>
                         </div>
                       </div>
                     )}
@@ -386,12 +415,16 @@ export default function MapView({ crimes = EMPTY_ARRAY, complaints = EMPTY_ARRAY
             <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-2 block border-t border-slate-700/50 pt-3">Citizen Core Reporting</span>
             <div className="space-y-2 flex flex-col pl-0.5">
               <div className="flex items-center gap-2">
+                <div className="w-2 h-3 bg-[#a855f7] rounded-t-full rounded-b-full shadow-[0_0_5px_rgba(168,85,247,0.5)] border border-slate-900" />
+                <span className="text-[10px] font-semibold text-slate-200">Unverified (Raw)</span>
+              </div>
+              <div className="flex items-center gap-2">
                 <div className="w-2 h-3 bg-[#3b82f6] rounded-t-full rounded-b-full shadow-[0_0_5px_rgba(59,130,246,0.5)] border border-slate-900" />
-                <span className="text-[10px] font-semibold text-slate-200">Pending Investigation</span>
+                <span className="text-[10px] font-semibold text-slate-200">Under Review</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-3 bg-[#10b981] rounded-t-full rounded-b-full shadow-[0_0_5px_rgba(16,185,129,0.5)] border border-slate-900" />
-                <span className="text-[10px] font-semibold text-slate-200">Resolved / Verified</span>
+                <span className="text-[10px] font-semibold text-slate-200">Verified Intel</span>
               </div>
             </div>
           </div>

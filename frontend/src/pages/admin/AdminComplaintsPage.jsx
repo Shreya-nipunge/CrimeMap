@@ -22,7 +22,7 @@ function timeAgo(dateString) {
 export default function AdminComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending'); // 'all', 'pending', 'resolved', 'rejected'
+  const [filter, setFilter] = useState('UNVERIFIED'); // 'all', 'UNVERIFIED', 'UNDER_REVIEW', 'VERIFIED', 'REJECTED'
   const [search, setSearch] = useState('');
   
   // Modal State
@@ -35,7 +35,7 @@ export default function AdminComplaintsPage() {
     try {
       const db = await getComplaints(null, null, true); // include_rejected = true
       // Ensure we sort by date descending
-      const sorted = (db.complaints || []).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const sorted = (db.complaints || []).sort((a,b) => new Date(b.created_at || b.timestamp) - new Date(a.created_at || a.timestamp));
       setComplaints(sorted);
     } catch (e) {
       console.error(e);
@@ -63,7 +63,7 @@ export default function AdminComplaintsPage() {
     setIsProcessing(false);
   };
 
-  const pendingCount = complaints.filter(c => c.status === 'pending').length;
+  const pendingCount = complaints.filter(c => c.status === 'UNVERIFIED' || c.status === 'pending').length;
 
   const filteredComplaints = complaints.filter(c => {
     if (filter !== 'all' && c.status !== filter) return false;
@@ -95,13 +95,13 @@ export default function AdminComplaintsPage() {
       {/* Control Bar */}
       <div className="flex flex-col md:flex-row gap-4 justify-between bg-[#132240] p-4 rounded-xl border border-slate-700/50">
          <div className="flex items-center gap-2 bg-slate-900/80 p-1 rounded-lg border border-slate-800">
-           {['all', 'pending', 'resolved', 'rejected'].map(f => (
+           {['all', 'UNVERIFIED', 'UNDER_REVIEW', 'VERIFIED', 'REJECTED'].map(f => (
               <button 
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-4 py-1.5 rounded-md text-xs font-bold capitalize transition-all ${filter === f ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                 {f}
+                 {f.replace('_', ' ')}
               </button>
            ))}
          </div>
@@ -165,13 +165,22 @@ export default function AdminComplaintsPage() {
                          <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1 uppercase"><MapPin size={10} /> {comp.district}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                         <span className="text-slate-300 font-medium">{timeAgo(comp.timestamp)}</span>
+                         {['UNVERIFIED', 'pending', 'UNDER_REVIEW'].includes(comp.status) ? (
+                            <div className="flex flex-col">
+                               <span className="text-orange-400 font-bold tracking-wide">Pending for {timeAgo(comp.created_at || comp.timestamp).replace(' ago', '')}</span>
+                               <span className="text-[10px] text-slate-500 mt-0.5">Reported: {new Date(comp.created_at || comp.timestamp).toLocaleDateString()}</span>
+                            </div>
+                         ) : (
+                            <span className="text-slate-300 font-medium">Reported {timeAgo(comp.created_at || comp.timestamp)}</span>
+                         )}
                       </td>
                       <td className="px-6 py-4">
-                         {comp.status === 'pending' ? (
-                            <span className="flex items-center gap-1.5 text-orange-400 font-bold text-xs"><AlertTriangle size={14} /> Pending</span>
-                         ) : comp.status === 'resolved' ? (
-                            <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs"><CheckCircle size={14} /> Resolved</span>
+                         {comp.status === 'UNVERIFIED' || comp.status === 'pending' ? (
+                            <span className="flex items-center gap-1.5 text-purple-400 font-bold text-xs"><AlertTriangle size={14} /> Unverified</span>
+                         ) : comp.status === 'UNDER_REVIEW' ? (
+                            <span className="flex items-center gap-1.5 text-blue-400 font-bold text-xs"><Eye size={14} /> Under Review</span>
+                         ) : comp.status === 'VERIFIED' || comp.status === 'resolved' ? (
+                            <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs"><CheckCircle size={14} /> Verified</span>
                          ) : (
                             <span className="flex items-center gap-1.5 text-red-500 font-bold text-xs"><XCircle size={14} /> Rejected</span>
                          )}
@@ -184,15 +193,22 @@ export default function AdminComplaintsPage() {
                                title="View Details"
                             ><Eye size={16} /></button>
                             
-                            {comp.status === 'pending' && (
+                            {['UNVERIFIED', 'pending', 'UNDER_REVIEW'].includes(comp.status) && (
                                <>
+                               {comp.status !== 'UNDER_REVIEW' && (
+                                 <button 
+                                    onClick={() => handleStatusUpdate(comp.id, 'UNDER_REVIEW')}
+                                    className="px-2 py-1.5 flex items-center gap-1.5 bg-slate-800 hover:bg-blue-500 border border-slate-700 hover:border-blue-400 hover:text-white text-slate-400 rounded-md transition-colors text-xs font-semibold"
+                                    title="Mark Under Review (Optional)"
+                                 ><Eye size={14} /> Review (Intermediate)</button>
+                               )}
                                <button 
-                                  onClick={() => handleStatusUpdate(comp.id, 'resolved')}
-                                  className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-transparent hover:border-emerald-400 hover:text-white text-emerald-500 rounded-md transition-colors"
-                                  title="Mark Resolved"
-                               ><CheckCircle size={16} /></button>
+                                  onClick={() => handleStatusUpdate(comp.id, 'VERIFIED')}
+                                  className="px-3 py-1.5 flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-transparent hover:border-emerald-400 hover:text-white text-emerald-500 rounded-md transition-colors text-xs font-bold"
+                                  title="Finalize Verification"
+                               ><CheckCircle size={14} /> Verify (Final)</button>
                                <button 
-                                  onClick={() => setConfirmAction({id: comp.id, status: 'rejected'})}
+                                  onClick={() => setConfirmAction({id: comp.id, status: 'REJECTED'})}
                                   className="p-1.5 bg-red-500/10 hover:bg-red-500 border border-transparent hover:border-red-400 hover:text-white text-red-500 rounded-md transition-colors"
                                   title="Reject Complaint"
                                ><XCircle size={16} /></button>
@@ -217,15 +233,17 @@ export default function AdminComplaintsPage() {
                  <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       Intelligence Briefing
-                      {selectedComplaint.status === 'pending' ? (
-                        <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-orange-500/20">Pending Action</span>
-                      ) : selectedComplaint.status === 'resolved' ? (
-                        <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-emerald-500/20">Resolved</span>
+                      {['UNVERIFIED', 'pending'].includes(selectedComplaint.status) ? (
+                        <span className="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-purple-500/20">Unverified</span>
+                      ) : selectedComplaint.status === 'UNDER_REVIEW' ? (
+                        <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-blue-500/20">Under Review</span>
+                      ) : ['VERIFIED', 'resolved'].includes(selectedComplaint.status) ? (
+                        <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-emerald-500/20">Verified</span>
                       ) : (
                         <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-red-500/20">Rejected</span>
                       )}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">Logged {new Date(selectedComplaint.timestamp).toLocaleString()}</p>
+                    <p className="text-xs text-slate-400 mt-1">Logged {new Date(selectedComplaint.created_at || selectedComplaint.timestamp).toLocaleString()}</p>
                  </div>
                  <button onClick={() => setSelectedComplaint(null)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-500 hover:text-white">
                     ✕
@@ -242,8 +260,10 @@ export default function AdminComplaintsPage() {
                     </div>
                     <div className="bg-[#132240] p-4 rounded-xl border border-slate-700/50">
                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Human Source</span>
-                       <span className="text-slate-200 font-medium">{selectedComplaint.name}</span>
-                       <div className="text-xs text-slate-400 mt-1">{selectedComplaint.phone} {selectedComplaint.email ? `• ${selectedComplaint.email}` : ''}</div>
+                       <span className="text-slate-200 font-medium">{selectedComplaint.name || 'Anonymous Viewer'}</span>
+                       <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {selectedComplaint.phone || 'No Phone'} {selectedComplaint.email ? `• ${selectedComplaint.email}` : ''}
+                       </div>
                     </div>
                  </div>
 

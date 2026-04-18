@@ -182,33 +182,49 @@ def generate_benchmarking_insight(stat: Dict[str, Any]) -> str:
     elif trend == "increasing": insights.append("Recent uptick in reported activities.")
     else: insights.append("Security metrics remain stable.")
     return " ".join(insights)
+def compute_complaint_signal(complaints_for_district: List[Dict[str, Any]]) -> int:
+    score = 0
+    for c in complaints_for_district:
+        st = c.get("status", "")
+        if st in ["UNVERIFIED", "pending"]:
+            score += 1
+        elif st == "UNDER_REVIEW":
+            score += 2
+        elif st in ["VERIFIED", "resolved"]:
+            score += 3
+    return score
+
 def get_gap_alerts(crime_data: List[Dict[str, Any]], complaints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Identifies 'Citizen Gaps' where official crime scores are low but 
     citizen complaint density is high, suggesting under-reporting.
     """
-    # 1. Count complaints by district
+    # 1. Group complaints by district
     comp_map = {}
     for c in complaints:
         d = c.get("district", "Unknown")
-        comp_map[d] = comp_map.get(d, 0) + 1
+        if d not in comp_map: comp_map[d] = []
+        comp_map[d].append(c)
 
     # 2. Compare with official crime score
     alerts = []
+    THRESHOLD = 5
     for r in crime_data:
         dist = r.get("district")
         score = int(r.get("crime_score", 0))
-        comp_count = comp_map.get(dist, 0)
+        district_complaints = comp_map.get(dist, [])
         
-        # Anomaly Detection Logic
-        # If a district has > 3 complaints but a crime score < 50, it's a high gap
-        if comp_count >= 3 and score < 50:
+        signal = compute_complaint_signal(district_complaints)
+        
+        # Anomaly Detection Logic: High Citizen Signal vs Low Official Count
+        if signal >= THRESHOLD and score < 50:
             alerts.append({
                 "district": dist,
                 "state": r.get("state_name", "Unknown"),
-                "complaint_count": comp_count,
+                "complaint_count": len(district_complaints),
                 "official_score": score,
-                "severity": "CRITICAL" if comp_count > 5 else "MODERATE"
+                "signal_strength": min(100, signal * 10), # scale up for UI visualization
+                "severity": "CRITICAL" if signal > 15 else "MODERATE"
             })
     return alerts
 

@@ -19,6 +19,9 @@ class ComplaintStatusUpdate(BaseModel):
     status: str
     reason: Optional[str] = None
 
+class ComplaintRejectReq(BaseModel):
+    admin_notes: str
+
 class AdminRegisterReq(BaseModel):
     email: str
     password: str
@@ -75,7 +78,35 @@ def _get_data(state: str = "Maharashtra"):
             state  # fallback to whatever was passed
         )
         _processed_data[state_key] = load_processed(canonical)
+        _enrich_state_data(state_key)
     return _processed_data[state_key]
+
+def _enrich_state_data(state_key: str):
+    if state_key == "all" or state_key not in _processed_data: return
+    db = _read_complaints()
+    from collections import defaultdict
+    comp_map = defaultdict(list)
+    for c in db.get("complaints", []):
+        comp_map[c.get("district", "Unknown")].append(c)
+        
+    for row in _processed_data[state_key]:
+        d = row.get("district", "")
+        pending, under_review, verified = 0, 0, 0
+        for c in comp_map.get(d, []):
+            st = c.get("status", "")
+            if st in ["UNVERIFIED", "pending"]: pending += 1
+            elif st == "UNDER_REVIEW": under_review += 1
+            elif st in ["VERIFIED", "resolved"]: verified += 1
+            
+        total = pending + under_review + verified
+        rate = (under_review + verified) / total if total > 0 else 0
+        
+        resp = "HIGH"
+        if total >= 5 and rate < 0.3: resp = "LOW"
+        elif total >= 5 and rate < 0.7: resp = "MODERATE"
+        
+        row["admin_responsiveness"] = resp
+        row["response_rate"] = rate
 
 from ..services.analytics_service import compute_safety_score_and_trends, get_rising_crimes, get_state_benchmarks, get_actionable_intelligence, get_gap_alerts, STATE_CENTROIDS
 
@@ -347,14 +378,45 @@ async def submit_complaint(
     crime_type: str = Form(...), description: str = Form(...), location: str = Form(...),
     state: Optional[str] = Form("Maharashtra"), district: Optional[str] = Form("Unknown"),
     lat: Optional[float] = Form(0.0), lng: Optional[float] = Form(0.0),
+    share_description: Optional[str] = Form("true"),
     image: Optional[UploadFile] = File(None), current_user: dict = Depends(get_current_user)
 ):
     db = _read_complaints()
     import uuid
+    from datetime import datetime
+    import shutil
     complaint_id = str(uuid.uuid4())[:8]
-    new_complaint = {"id": complaint_id, "name": name, "phone": phone, "email": email, "crime_type": crime_type, "description": description, "location": location, "state": state, "district": district, "lat": lat, "lng": lng, "status": "pending", "timestamp": "2024-03-12T10:00:00Z", "user_email": current_user["sub"]}
+    
+    image_url = None
+    if image is not None and image.filename:
+        uploads_dir = Path(__file__).resolve().parent.parent.parent / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        ext = image.filename.split(".")[-1]
+        file_name = f"{complaint_id}.{ext}"
+        save_path = uploads_dir / file_name
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        image_url = f"http://localhost:8000/uploads/{file_name}"
+    
+    new_complaint = {
+        "id": complaint_id, "name": name, "phone": phone, "email": email, 
+        "crime_type": crime_type, "description": description, "location": location, 
+        "state": state, "district": district, "lat": lat, "lng": lng, 
+        "status": "UNVERIFIED", "confidence": "LOW", 
+        "created_at": datetime.utcnow().isoformat() + "Z", 
+        "user_email": current_user["sub"],
+        "image_url": image_url,
+        "share_description": share_description.lower() == "true"
+    }
+    
     db["complaints"].append(new_complaint)
     with COMPLAINTS_FILE.open('w', encoding='utf-8') as f: json.dump(db, f, indent=2)
+    
+    # Invalidate Cache to recompute Admin Responsiveness metrics
+    state_key = (state or "Maharashtra").lower()
+    if state_key in _processed_data: _enrich_state_data(state_key)
+    if "all" in _processed_data: del _processed_data["all"]
+    
     return {"message": "Complaint submitted successfully", "id": complaint_id}
 
 @router.get("/my-complaints")
@@ -362,6 +424,19 @@ def get_my_complaints(current_user: dict = Depends(get_current_user)):
     db = _read_complaints()
     email = current_user["sub"]
     user_complaints = [c for c in db["complaints"] if c.get("user_email") == email]
+    
+    from datetime import datetime, timezone
+    now = datetime.utcnow()
+    for c in user_complaints:
+        ts_str = c.get("created_at") or c.get("timestamp")
+        age = 0
+        if ts_str:
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", ""))
+                age = (now - ts).total_seconds() / 3600
+            except: pass
+        c["age_hours"] = round(age, 1)
+
     # NOTE: We keep 'rejected' here so the user can see their report was denied
     return {"complaints": user_complaints}
 
@@ -374,22 +449,71 @@ def get_complaints(state: Optional[str] = None, status: Optional[str] = None, in
     
     # Critical Privacy Filter: Hide rejected items from public views unless explicitly asked (admin)
     if not include_rejected:
-        res = [c for c in res if c.get("status") != "rejected"]
+        res = [c for c in res if c.get("status") in ["UNVERIFIED", "UNDER_REVIEW", "VERIFIED", "pending", "resolved"]]
         
     if status: res = [c for c in res if c.get("status") == status]
+    
+    from datetime import datetime, timezone
+    now = datetime.utcnow()
+    for c in res:
+        ts_str = c.get("created_at") or c.get("timestamp")
+        age = 0
+        if ts_str:
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", ""))
+                age = (now - ts).total_seconds() / 3600
+            except: pass
+        c["age_hours"] = round(age, 1)
+
     return {"complaints": res}
 
 
-@router.patch("/complaints/{complaint_id}/status")
-def patch_complaint_status(complaint_id: str, data: ComplaintStatusUpdate):
+@router.patch("/complaints/{id}/review")
+def review_complaint(id: str):
     db = _read_complaints()
+    from datetime import datetime
     for c in db["complaints"]:
-        if c.get("id") == complaint_id:
-            c["status"] = data.status
-            if data.reason:
-                c["rejection_reason"] = data.reason
+        if c.get("id") == id:
+            c["status"] = "UNDER_REVIEW"
+            c["confidence"] = "MEDIUM"
+            c["reviewed_at"] = datetime.utcnow().isoformat() + "Z"
             with COMPLAINTS_FILE.open('w', encoding='utf-8') as f: json.dump(db, f, indent=2)
-            return {"message": f"Status updated to {data.status}"}
+            state_key = c.get("state", "Maharashtra").lower()
+            if state_key in _processed_data: _enrich_state_data(state_key)
+            if "all" in _processed_data: del _processed_data["all"]
+            return {"message": "Complaint is now UNDER_REVIEW"}
+    raise HTTPException(status_code=404, detail="Complaint not found")
+
+@router.patch("/complaints/{id}/verify")
+def verify_complaint(id: str):
+    db = _read_complaints()
+    from datetime import datetime
+    for c in db["complaints"]:
+        if c.get("id") == id:
+            c["status"] = "VERIFIED"
+            c["confidence"] = "HIGH"
+            c["reviewed_at"] = datetime.utcnow().isoformat() + "Z"
+            with COMPLAINTS_FILE.open('w', encoding='utf-8') as f: json.dump(db, f, indent=2)
+            state_key = c.get("state", "Maharashtra").lower()
+            if state_key in _processed_data: _enrich_state_data(state_key)
+            if "all" in _processed_data: del _processed_data["all"]
+            return {"message": "Complaint is now VERIFIED"}
+    raise HTTPException(status_code=404, detail="Complaint not found")
+
+@router.patch("/complaints/{id}/reject")
+def reject_complaint(id: str, data: ComplaintRejectReq):
+    db = _read_complaints()
+    from datetime import datetime
+    for c in db["complaints"]:
+        if c.get("id") == id:
+            c["status"] = "REJECTED"
+            c["admin_notes"] = data.admin_notes
+            c["reviewed_at"] = datetime.utcnow().isoformat() + "Z"
+            with COMPLAINTS_FILE.open('w', encoding='utf-8') as f: json.dump(db, f, indent=2)
+            state_key = c.get("state", "Maharashtra").lower()
+            if state_key in _processed_data: _enrich_state_data(state_key)
+            if "all" in _processed_data: del _processed_data["all"]
+            return {"message": "Complaint is now REJECTED"}
     raise HTTPException(status_code=404, detail="Complaint not found")
 
 @router.post("/upload-csv")

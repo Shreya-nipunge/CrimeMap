@@ -62,17 +62,17 @@ export default function MyComplaintsPage() {
         <div className="flex items-center gap-3 bg-slate-900/50 border border-slate-800 px-4 py-2.5 rounded-2xl shadow-inner">
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pending: {complaints.filter(c => c.status === 'pending').length}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pending: {complaints.filter(c => ['UNVERIFIED', 'UNDER_REVIEW', 'pending'].includes(c.status)).length}</span>
            </div>
            <div className="w-[1px] h-3 bg-slate-800" />
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resolved: {complaints.filter(c => c.status === 'resolved').length}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resolved: {complaints.filter(c => ['VERIFIED', 'resolved'].includes(c.status)).length}</span>
            </div>
            <div className="w-[1px] h-3 bg-slate-800" />
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rejected: {complaints.filter(c => c.status === 'rejected').length}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rejected: {complaints.filter(c => ['REJECTED', 'rejected'].includes(c.status)).length}</span>
            </div>
         </div>
       </div>
@@ -104,13 +104,15 @@ export default function MyComplaintsPage() {
               className="group bg-slate-900/60 border border-slate-800/50 rounded-2xl p-5 hover:bg-slate-800/40 hover:border-blue-500/30 transition-all duration-300 flex flex-col md:flex-row gap-6 items-start md:items-center relative overflow-hidden"
             >
               {/* Status Indicator Bar */}
-              <div className={`absolute top-0 bottom-0 left-0 w-1 ${c.status === 'resolved' ? 'bg-emerald-500' : c.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500'}`} />
+              <div className={`absolute top-0 bottom-0 left-0 w-1 ${['VERIFIED', 'resolved'].includes(c.status) ? 'bg-emerald-500' : ['REJECTED', 'rejected'].includes(c.status) ? 'bg-red-500' : 'bg-amber-500'}`} />
               
               <div className="flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  {c.status === 'pending' ? (
+                  {['UNVERIFIED', 'pending'].includes(c.status) ? (
                     <span className="flex items-center gap-1.5 text-blue-400 font-bold text-xs"><Clock size={14} className="animate-pulse" /> Analysis in Progress</span>
-                  ) : c.status === 'resolved' ? (
+                  ) : c.status === 'UNDER_REVIEW' ? (
+                    <span className="flex items-center gap-1.5 text-amber-400 font-bold text-xs"><AlertTriangle size={14} className="animate-pulse" /> Under Active Review</span>
+                  ) : ['VERIFIED', 'resolved'].includes(c.status) ? (
                     <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs"><CheckCircle size={14} /> Intelligence Verified</span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-red-500/60 font-bold text-xs"><XCircle size={14} /> Verification Failed</span>
@@ -122,10 +124,10 @@ export default function MyComplaintsPage() {
                   {c.description}
                 </p>
 
-                {c.status === 'rejected' && (
+                {['REJECTED', 'rejected'].includes(c.status) && (
                   <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-3 mb-4">
                     <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 italic">Administrative Decision</p>
-                    <p className="text-xs text-slate-300">This report did not meet our verification criteria. <span className="text-slate-500 font-medium">Reason: {c.rejection_reason || 'Insufficient Data'}</span></p>
+                    <p className="text-xs text-slate-300">This report did not meet our verification criteria. <span className="text-slate-500 font-medium">Reason: {c.admin_notes || c.rejection_reason || 'Insufficient Data'}</span></p>
                   </div>
                 )}
 
@@ -136,7 +138,7 @@ export default function MyComplaintsPage() {
                   </div>
                   <div className="flex items-center gap-2 text-slate-500">
                     <Calendar size={14} className="text-slate-600" />
-                    <span className="text-xs font-semibold">{new Date(c.timestamp).toLocaleDateString()} at {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-xs font-semibold">{c.created_at || c.timestamp ? `${new Date(c.created_at || c.timestamp).toLocaleDateString()} at ${new Date(c.created_at || c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Recently Submitted"}</span>
                   </div>
                 </div>
               </div>

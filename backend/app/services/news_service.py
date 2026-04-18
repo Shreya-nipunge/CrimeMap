@@ -21,10 +21,21 @@ def get_severity(text: str) -> str:
     text = text.lower()
     # High-intensity keywords for judge impact
     if any(w in text for w in ["murder", "rape", "kill", "terror", "gang", "multiple victims", "weapon"]):
-        return "high"
+        return "HIGH"
     if any(w in text for w in ["robbery", "assault", "fraud", "theft", "clash", "arrest"]):
-        return "medium"
-    return "low"
+        return "MEDIUM"
+    return "LOW"
+
+def rank_news(article: Dict[str, Any]) -> int:
+    score = 0
+    if article.get("source") in TRUSTED_SOURCES:
+        score += 3
+    if "murder" in (article.get("title") or "").lower():
+        score += 3
+    # Check recency (if not string "Recent" and has formatted date implies it was properly parsed)
+    if article.get("publishedAt") != "Recent":
+        score += 2
+    return score
 
 def get_location_hint(text: str) -> str:
     # Very basic regional extraction for OSINT effect
@@ -112,14 +123,16 @@ def get_crime_news(query: str) -> List[Dict[str, Any]]:
                 "source": source,
                 "publishedAt": formatted_date,
                 "severity": get_severity(combined_text),
-                "confidence": "high" if is_trusted else "medium",
+                "confidence": "HIGH" if is_trusted else "MEDIUM",
                 "location_hint": get_location_hint(combined_text)
             })
-            
-            if len(filtered_articles) >= 6: break
+
+        # Apply Intelligence Ranking and retrieve top 6
+        filtered_articles.sort(key=rank_news, reverse=True)
+        top_articles = filtered_articles[:6]
 
         # Resilient Fallback: If filtering is too strict, return raw results to ensure UI is never empty
-        result_set = filtered_articles if len(filtered_articles) >= 3 else [
+        result_set = top_articles if len(top_articles) >= 3 else [
             {
                 "title": a.get("title"),
                 "description": a.get("description"),
@@ -127,8 +140,8 @@ def get_crime_news(query: str) -> List[Dict[str, Any]]:
                 "image": a.get("urlToImage"),
                 "source": a.get("source", {}).get("name"),
                 "publishedAt": "Recent",
-                "severity": "low",
-                "confidence": "medium",
+                "severity": "LOW",
+                "confidence": "MEDIUM",
                 "location_hint": None
             } for a in articles[:6]
         ]

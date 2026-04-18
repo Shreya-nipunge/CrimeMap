@@ -129,8 +129,14 @@ export const getMyComplaints = async () => {
   return response.data;
 };
 
-export const updateComplaintStatus = async (id, status = 'resolved', reason = null) => {
-  const response = await apiClient.patch(`/complaints/${id}/status`, { status, reason });
+export const updateComplaintStatus = async (id, status = 'VERIFIED', reason = null) => {
+  let endpoint = `/complaints/${id}/verify`;
+  if (status === 'UNDER_REVIEW') endpoint = `/complaints/${id}/review`;
+  if (status === 'REJECTED' || status === 'rejected') endpoint = `/complaints/${id}/reject`;
+  if (status === 'VERIFIED' || status === 'resolved') endpoint = `/complaints/${id}/verify`;
+
+  const payload = (status === 'REJECTED' || status === 'rejected') ? { admin_notes: reason || 'Rejected by Admin' } : {};
+  const response = await apiClient.patch(endpoint, payload);
   return response.data;
 };
 
