@@ -21,6 +21,7 @@ import MyComplaintsPage from './pages/dashboard/MyComplaintsPage.jsx';
 // Admin Views
 import AnalyticsPage from './pages/admin/AnalyticsPage.jsx';
 import AdminComplaintsPage from './pages/admin/AdminComplaintsPage.jsx';
+import AdminUpload from './pages/AdminUpload.jsx';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><DashboardLayout /></ProtectedRoute>}>
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="complaints" element={<AdminComplaintsPage />} />
+          <Route path="upload" element={<AdminUpload />} />
         </Route>
       </Routes>
     </Router>

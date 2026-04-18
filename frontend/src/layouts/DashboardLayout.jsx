@@ -1,4 +1,4 @@
-import { ShieldAlert, Map, FileWarning, Search, TrendingUp, AlertTriangle, LogOut, FileText } from 'lucide-react';
+import { ShieldAlert, Map, FileWarning, Search, TrendingUp, AlertTriangle, LogOut, FileText, Upload } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 export default function DashboardLayout() {
@@ -17,6 +17,7 @@ export default function DashboardLayout() {
   const adminLinks = [
     { to: "/admin/analytics", icon: <TrendingUp size={20} />, label: "Analytics" },
     { to: "/admin/complaints", icon: <AlertTriangle size={20} />, label: "Complaints Desk" },
+    { to: "/admin/upload", icon: <Upload size={20} />, label: "Data Ingestion" },
   ];
 
   const links = isAdmin ? adminLinks : userLinks;

@@ -391,3 +391,40 @@ def patch_complaint_status(complaint_id: str, data: ComplaintStatusUpdate):
             with COMPLAINTS_FILE.open('w', encoding='utf-8') as f: json.dump(db, f, indent=2)
             return {"message": f"Status updated to {data.status}"}
     raise HTTPException(status_code=404, detail="Complaint not found")
+
+@router.post("/upload-csv")
+async def upload_csv(
+    state: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    import shutil
+    
+    # Ensure only admins can upload and alter datasets
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized. Admins only.")
+        
+    uploads_dir = Path(__file__).resolve().parents[2] / "data" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Secure storage of the raw upload
+    safe_filename = file.filename.replace(" ", "_").replace("/", "")
+    file_path = uploads_dir / safe_filename
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    try:
+        # Run the full processing pipeline: normalizes columns, matches districts to coords, 
+        # calculates crime_scores, and merges with existing CSV for the state.
+        rows = process_and_save(state=state, source_csv=file_path)
+        
+        # Invalidate the in-memory cache for this exact state to force 
+        # all subsequent GET requests to read the freshly processed CSV from disk.
+        state_key = state.lower()
+        if state_key in _processed_data:
+            del _processed_data[state_key]
+            
+        return {"status": f"Data processed successfully. {len(rows)} records loaded for {state}."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")

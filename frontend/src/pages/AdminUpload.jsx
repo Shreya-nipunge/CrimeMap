@@ -5,8 +5,21 @@ import { useState, useEffect } from 'react';
 import { uploadDataset } from '../services/api.js';
 import { useNavigate, Link } from 'react-router-dom';
 
+const ALL_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu And Kashmir',
+  'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra',
+  'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman And Nicobar Islands', 'Chandigarh',
+  'The Dadra And Nagar Haveli And Daman And Diu',
+  'Delhi', 'Lakshadweep', 'Puducherry', 'Ladakh',
+];
+
 export default function AdminUpload() {
   const [file, setFile] = useState(null);
+  const [selectedState, setSelectedState] = useState('Maharashtra');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -30,7 +43,7 @@ export default function AdminUpload() {
     setStatus('Uploading dataset...');
 
     try {
-      const result = await uploadDataset(file);
+      const result = await uploadDataset(file, selectedState);
       setStatus(result.status ?? 'Dataset uploaded successfully.');
     } catch (err) {
       console.error(err);
@@ -73,10 +86,23 @@ export default function AdminUpload() {
             <span className="text-2xl">📤</span> Admin Dataset Upload
           </h1>
           <p className="text-sm text-slate-400 mb-8 border-b border-slate-700/50 pb-6">
-            Upload a new IPC dataset CSV (2017–2022). The system will securely reprocess the data and refresh the regional heatmap mapping.
+            Upload a new IPC dataset CSV. The system will securely reprocess the data and refresh the regional heatmap mapping.
           </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <label className="block text-sm font-semibold text-slate-200">
+            Target State / UT
+            <select
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0D1E38] px-3 py-2 text-sm text-slate-100 outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+            >
+              {ALL_STATES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+
           <label className="block text-sm font-semibold text-slate-200">
             Select CSV file
             <input

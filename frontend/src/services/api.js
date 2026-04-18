@@ -78,12 +78,13 @@ export const getNews = async (query) => {
   const response = await apiClient.get("/news", { params: { q: query } });
   return response.data;
 };
-// POST /api/upload — upload a new CSV raw dataset to refresh the heatmap data
-export const uploadDataset = async (file) => {
+// POST /api/upload-csv — upload a new CSV raw dataset to refresh the heatmap data
+export const uploadDataset = async (file, state) => {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("state", state);
 
-  const response = await apiClient.post("/upload", formData, {
+  const response = await apiClient.post("/upload-csv", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return response.data;
