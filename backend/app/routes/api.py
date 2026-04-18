@@ -36,25 +36,46 @@ class UserRegisterReq(BaseModel):
 # Cache the processed dataset in memory for faster response, keyed by state.
 _processed_data = {}
 
+# Canonical list of all states with processed data — loaded once at runtime
+_ALL_STATES: list = []
+
+def _get_all_state_names() -> list:
+    """Discover all states from district_coords.json at runtime."""
+    global _ALL_STATES
+    if _ALL_STATES:
+        return _ALL_STATES
+    import json
+    from pathlib import Path
+    coords_file = Path(__file__).resolve().parents[2] / "data" / "district_coords.json"
+    if coords_file.exists():
+        _ALL_STATES = list(json.loads(coords_file.read_text(encoding="utf-8")).keys())
+    else:
+        _ALL_STATES = ["Maharashtra", "Karnataka", "Delhi"]
+    return _ALL_STATES
+
 def _get_data(state: str = "Maharashtra"):
-    state = state.lower()
-    
+    state_key = state.lower()
+
     # Handle National Aggregation
-    if state == "all":
+    if state_key == "all":
         if "all" not in _processed_data:
-            all_states = ["Maharashtra", "Karnataka", "Delhi"]
             merged = []
-            for s in all_states:
-                # Load state data and inject state name immutably
+            for s in _get_all_state_names():
                 state_rows = load_processed(s)
-                merged.extend([{**r, "state_name": s} for r in state_rows])
+                if state_rows:
+                    merged.extend([{**r, "state_name": s} for r in state_rows])
             _processed_data["all"] = merged
         return _processed_data["all"]
 
-    # Handle Single State
-    if state not in _processed_data:
-        _processed_data[state] = load_processed(state)
-    return _processed_data[state]
+    # Handle Single State (case-insensitive key)
+    if state_key not in _processed_data:
+        # Find canonical state name (original casing) from coords
+        canonical = next(
+            (s for s in _get_all_state_names() if s.lower() == state_key),
+            state  # fallback to whatever was passed
+        )
+        _processed_data[state_key] = load_processed(canonical)
+    return _processed_data[state_key]
 
 from ..services.analytics_service import compute_safety_score_and_trends, get_rising_crimes, get_state_benchmarks, get_actionable_intelligence, get_gap_alerts, STATE_CENTROIDS
 
@@ -311,8 +332,7 @@ def get_insights(state: str = "Maharashtra", year: Optional[str] = None):
 
 @router.get("/analytics/benchmarks")
 def get_benchmarks():
-    states = ["Maharashtra", "Karnataka", "Delhi"]
-    all_data = {s: _get_data(s) for s in states}
+    all_data = {s: _get_data(s) for s in _get_all_state_names()}
     return get_state_benchmarks(all_data)
 
 # COMPLAINTS DB

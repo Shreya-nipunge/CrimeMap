@@ -93,7 +93,7 @@ def process_raw_data(rows: List[Dict[str, Any]], state_filter: str = "Maharashtr
         
         if not coord:
             # Try removal of suffixes if raw data was longer
-            for suffix in [" delhi", " city", " rural", " urban"]:
+            for suffix in [" delhi", " city", " rural", " urban", " district"]:
                 if suffix in dist_norm:
                     shorter = dist_norm.replace(suffix, "").strip()
                     if shorter in normalized_coords:
@@ -102,7 +102,7 @@ def process_raw_data(rows: List[Dict[str, Any]], state_filter: str = "Maharashtr
         
         if not coord:
             # Try appending suffixes if JSON mapping was longer
-            for suffix in [" delhi", " city", " rural", " urban"]:
+            for suffix in [" delhi", " city", " rural", " urban", " district"]:
                 longer = dist_norm + suffix
                 if longer in normalized_coords:
                     coord = normalized_coords[longer]

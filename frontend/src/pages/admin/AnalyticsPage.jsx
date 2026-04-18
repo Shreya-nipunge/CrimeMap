@@ -6,8 +6,20 @@ import PieDistribution from '../../components/PieDistribution.jsx';
 import AdminDashboardPanels from '../../components/AdminDashboardPanels.jsx';
 import * as api from '../../services/api.js';
 
+const ALL_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu And Kashmir',
+  'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra',
+  'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman And Nicobar Islands', 'Chandigarh',
+  'The Dadra And Nagar Haveli And Daman And Diu',
+  'Delhi', 'Lakshadweep', 'Puducherry', 'Ladakh',
+];
+
 export default function AnalyticsPage() {
-  const [selectedState, setSelectedState] = useState('Maharashtra');
+  const [selectedState, setSelectedState] = useState('all');
   const [selectedYear, setSelectedYear] = useState(''); // '' means All Years
   
   const [summaryData, setSummaryData] = useState({ total_incidents: 0, top_crime: '—', hottest_zone: '—', under_investigation: 0 });
@@ -42,7 +54,7 @@ export default function AnalyticsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Command Center Analytics</h2>
-          <p className="text-sm text-slate-400 mt-1">High-level systemic oversight and macro trend analysis.</p>
+          <p className="text-sm text-slate-400 mt-1">High-level systemic oversight and macro trend analysis — Pan-India coverage.</p>
         </div>
 
         {/* Filter Bar */}
@@ -52,10 +64,10 @@ export default function AnalyticsPage() {
              onChange={(e) => setSelectedState(e.target.value)}
              className="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-2 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
            >
-              <option value="all">National (All States)</option>
-              <option value="Maharashtra">Maharashtra</option>
-              <option value="Karnataka">Karnataka</option>
-              <option value="Delhi">Delhi</option>
+              <option value="all">🇮🇳 National (All States)</option>
+              {ALL_STATES.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
            </select>
 
            <select 
